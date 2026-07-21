@@ -1,0 +1,18 @@
+{
+  "name": "ServiceStack Restaurant MVP",
+  "short_name": "ServiceStack",
+  "description": "Mobile-first restaurant ordering, kitchen, billing, and reporting MVP.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8faf8",
+  "theme_color": "#10231f",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
