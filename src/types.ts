@@ -70,6 +70,8 @@ export interface Order {
   orderNumber: number;
   tableId: string;
   customerName?: string;
+  customerPhone?: string;
+  customerBirthdate?: string;
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
   subtotal: number;

@@ -9,25 +9,32 @@ import {
   Check,
   CheckCircle2,
   ChefHat,
+  Eye,
+  EyeOff,
   Home,
   IndianRupee,
   LogOut,
   Minus,
   Plus,
+  PlusCircle,
   Printer,
   QrCode,
   ReceiptText,
+  RefreshCw,
   Search,
   Settings,
   UserRound,
   Utensils,
   X,
   Loader2,
-  Building
+  Building,
+  Phone,
+  Calendar
 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { restaurantService } from './services/restaurantService';
 import { AuthModal } from './components/Auth';
+import { LandingPage } from './components/LandingPage';
 import type { DiningTable, MenuItem, Order, OrderStatus, PaymentMethod } from './types';
 
 const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
@@ -37,9 +44,15 @@ function useSnapshot() {
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
-    const fresh = await restaurantService.fetchTenantSnapshot();
-    setSnapshot({ ...fresh });
-    setLoading(false);
+    setLoading(true);
+    try {
+      const fresh = await restaurantService.fetchTenantSnapshot();
+      setSnapshot({ ...fresh });
+    } catch (err) {
+      console.error('Error refreshing tenant snapshot:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -54,15 +67,6 @@ function useSnapshot() {
 }
 
 function App() {
-  return (
-    <Routes>
-      <Route path="/r/:restaurantSlug/table/:tableToken" element={<CustomerOrder />} />
-      <Route path="/*" element={<StaffApp />} />
-    </Routes>
-  );
-}
-
-function StaffApp() {
   const snapshot = useSnapshot();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -75,16 +79,8 @@ function StaffApp() {
     }
   }, []);
 
-  async function handleSignOut() {
-    if (supabase) {
-      await supabase.auth.signOut();
-      setUserEmail(null);
-      snapshot.refresh();
-    }
-  }
-
   return (
-    <div className="app-shell">
+    <>
       {showAuthModal && (
         <AuthModal
           onAuthComplete={() => {
@@ -96,10 +92,93 @@ function StaffApp() {
           }}
         />
       )}
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <LandingPage
+              onOpenAuth={() => setShowAuthModal(true)}
+              userEmail={userEmail}
+              orgName={snapshot.organization.name}
+            />
+          }
+        />
+        <Route path="/r/:restaurantSlug/table/:tableToken" element={<CustomerOrder />} />
+        <Route
+          path="/app/*"
+          element={
+            <StaffApp
+              snapshot={snapshot}
+              userEmail={userEmail}
+              setUserEmail={setUserEmail}
+              setShowAuthModal={setShowAuthModal}
+            />
+          }
+        />
+        <Route
+          path="/*"
+          element={
+            <StaffApp
+              snapshot={snapshot}
+              userEmail={userEmail}
+              setUserEmail={setUserEmail}
+              setShowAuthModal={setShowAuthModal}
+            />
+          }
+        />
+      </Routes>
+    </>
+  );
+}
 
+function StaffApp({
+  snapshot,
+  userEmail,
+  setUserEmail,
+  setShowAuthModal
+}: {
+  snapshot: ReturnType<typeof useSnapshot>;
+  userEmail: string | null;
+  setUserEmail: React.Dispatch<React.SetStateAction<string | null>>;
+  setShowAuthModal: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  async function handleSignOut() {
+    if (supabase) {
+      await supabase.auth.signOut();
+      setUserEmail(null);
+      snapshot.refresh();
+    }
+  }
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    try {
+      await snapshot.refresh();
+    } catch (err) {
+      console.error('Refresh error:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
+  return (
+    <div className="app-shell">
       <header className="topbar">
-        <div className="status-time">
-          {snapshot.loading ? <Loader2 size={14} className="animate-spin" /> : 'LIVE'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Link to="/" className="topbar-home-link" title="Brand Landing Page">
+            <Utensils size={18} />
+          </Link>
+          <button
+            className="refresh-btn-topbar"
+            onClick={handleRefresh}
+            disabled={isRefreshing || snapshot.loading}
+            title="Click to refresh live restaurant data"
+          >
+            <RefreshCw size={14} className={isRefreshing || snapshot.loading ? 'animate-spin' : ''} />
+            <span className="hide-mobile">Refresh</span>
+          </button>
         </div>
         <div className="brand-title">
           <strong>{snapshot.organization.name}</strong>
@@ -144,13 +223,13 @@ function StaffApp() {
       </main>
 
       <nav className="bottom-nav" aria-label="Primary">
-        <NavItem to="/" icon={<Home size={18} />} label="Home" />
-        <NavItem to="/setup" icon={<Settings size={18} />} label="Setup" />
-        <NavItem to="/menu" icon={<BookOpen size={18} />} label="Menu" />
-        <NavItem to="/waiter" icon={<UserRound size={18} />} label="Waiter" />
-        <NavItem to="/kitchen" icon={<ChefHat size={18} />} label="Kitchen" />
-        <NavItem to="/billing" icon={<IndianRupee size={18} />} label="Pay" />
-        <NavItem to="/orders" icon={<ReceiptText size={18} />} label="Orders" />
+        <NavItem to="/app" icon={<Home size={18} />} label="Home" />
+        <NavItem to="/app/setup" icon={<Settings size={18} />} label="Setup" />
+        <NavItem to="/app/menu" icon={<BookOpen size={18} />} label="Menu" />
+        <NavItem to="/app/waiter" icon={<UserRound size={18} />} label="Waiter" />
+        <NavItem to="/app/kitchen" icon={<ChefHat size={18} />} label="Kitchen" />
+        <NavItem to="/app/billing" icon={<IndianRupee size={18} />} label="Pay" />
+        <NavItem to="/app/orders" icon={<ReceiptText size={18} />} label="Orders" />
       </nav>
     </div>
   );
@@ -166,6 +245,7 @@ function NavItem({ to, icon, label }: { to: string; icon: JSX.Element; label: st
 }
 
 function Dashboard({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
+  const [showRevenue, setShowRevenue] = useState(true);
   const activeOrders = snapshot.orders.filter((order) => !['completed', 'cancelled'].includes(order.orderStatus));
   const occupiedTables = snapshot.tables.filter((table) => table.status === 'occupied').length;
   const paidOrders = snapshot.orders.filter((order) => order.paymentStatus === 'paid');
@@ -180,8 +260,17 @@ function Dashboard({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
 
       <article className="revenue-card">
         <div>
-          <span>Today's Live Revenue</span>
-          <strong>{currency.format(revenue)}</strong>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>Today's Live Revenue</span>
+            <button
+              className="eye-toggle-btn"
+              onClick={() => setShowRevenue(!showRevenue)}
+              title={showRevenue ? 'Hide Revenue' : 'Show Revenue'}
+            >
+              {showRevenue ? <Eye size={15} /> : <EyeOff size={15} />}
+            </button>
+          </div>
+          <strong>{showRevenue ? currency.format(revenue) : '₹ ••••••'}</strong>
           <small>Total Paid Orders: <b>{paidOrders.length}</b></small>
         </div>
         <div className="sparkline" aria-hidden="true">
@@ -195,16 +284,56 @@ function Dashboard({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
       </article>
 
       <div className="section-header">
-        <h2>Quick Links</h2>
+        <h2>Quick Actions</h2>
       </div>
-      <div className="quick-grid">
-        <QuickLink to="/setup" icon={<Settings size={24} />} label="Setup" />
-        <QuickLink to="/menu" icon={<BookOpen size={24} />} label="Menu" />
-        <QuickLink to="/waiter" icon={<UserRound size={24} />} label="Waiter" />
-        <QuickLink to="/kitchen" icon={<ChefHat size={24} />} label="Kitchen" />
-        <QuickLink to="/billing" icon={<IndianRupee size={24} />} label="Billing / Pay" />
-        <QuickLink to="/orders" icon={<ReceiptText size={24} />} label="Order History" />
-        <QuickLink to="/reports" icon={<BarChart3 size={24} />} label="Reports" />
+      <div className="quick-actions-grid">
+        <Link className="quick-action-card" to="/app/waiter">
+          <div className="action-icon emerald"><PlusCircle size={22} /></div>
+          <div>
+            <strong>+ New Table Order</strong>
+            <span>Create order for dining table</span>
+          </div>
+        </Link>
+
+        <Link className="quick-action-card" to="/app/kitchen">
+          <div className="action-icon amber"><ChefHat size={22} /></div>
+          <div>
+            <strong>Kitchen Board (KDS)</strong>
+            <span>Manage active preparation</span>
+          </div>
+        </Link>
+
+        <Link className="quick-action-card" to="/app/billing">
+          <div className="action-icon purple"><IndianRupee size={22} /></div>
+          <div>
+            <strong>Collect Payment</strong>
+            <span>Process cash, UPI & cards</span>
+          </div>
+        </Link>
+
+        <Link className="quick-action-card" to="/app/menu">
+          <div className="action-icon blue"><BookOpen size={22} /></div>
+          <div>
+            <strong>Manage Menu</strong>
+            <span>Update items & prices</span>
+          </div>
+        </Link>
+
+        <Link className="quick-action-card" to="/app/setup">
+          <div className="action-icon rose"><QrCode size={22} /></div>
+          <div>
+            <strong>Table QR Codes</strong>
+            <span>Configure & print dining QRs</span>
+          </div>
+        </Link>
+
+        <Link className="quick-action-card" to="/app/reports">
+          <div className="action-icon indigo"><BarChart3 size={22} /></div>
+          <div>
+            <strong>Sales Analytics</strong>
+            <span>View reports & performance</span>
+          </div>
+        </Link>
       </div>
     </section>
   );
@@ -217,15 +346,6 @@ function Metric({ label, value, tone, note }: { label: string; value: string; to
       <strong>{value}</strong>
       {note && <small>{note}</small>}
     </article>
-  );
-}
-
-function QuickLink({ to, icon, label }: { to: string; icon: JSX.Element; label: string }) {
-  return (
-    <Link className="quick-link" to={to}>
-      {icon}
-      <span>{label}</span>
-    </Link>
   );
 }
 
@@ -269,7 +389,7 @@ function Setup({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
     try {
       await restaurantService.createDiningTable(
         tableNumber.trim(),
-        tableName.trim() || `Table ${tableNumber}`,
+        tableName.trim(),
         capacity,
         selectedAreaId || null,
         snapshot.location.id,
@@ -287,78 +407,40 @@ function Setup({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
   }
 
   return (
-    <section className="stack">
+    <section className="stack setup-screen">
       <div className="page-title">
-        <h1>Restaurant Setup</h1>
+        <h1>Table & Area Setup</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button className="subtle-button compact" onClick={() => setShowAddAreaModal(true)}>
-            <Plus size={14} /> Add Area
+            + Add Area
           </button>
           <button className="primary-action compact" onClick={() => setShowAddTableModal(true)}>
-            <Plus size={14} /> Add Table
+            + Add Table
           </button>
         </div>
-      </div>
-
-      <div className="toolbar-row">
-        <label>
-          <span>Filter Dining Area</span>
-          <select value={selectedAreaId} onChange={(e) => setSelectedAreaId(e.target.value)}>
-            <option value="">All Areas</option>
-            {snapshot.diningAreas.map((area) => (
-              <option value={area.id} key={area.id}>
-                {area.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="qr-grid">
-        {snapshot.tables
-          .filter((t) => !selectedAreaId || t.diningAreaId === selectedAreaId)
-          .map((table) => {
-            const url = `${origin}/r/${snapshot.organization.slug}/table/${table.publicToken}`;
-            return (
-              <article className="qr-card" key={table.id}>
-                <span className={`status-dot ${table.status}`} />
-                <div>
-                  <h3>{table.displayName}</h3>
-                  <p>{table.capacity} Seats ({table.status})</p>
-                  <Link to={`/r/${snapshot.organization.slug}/table/${table.publicToken}`} target="_blank">
-                    Open QR Link
-                  </Link>
-                </div>
-                <QRCodeSVG value={url} size={56} />
-              </article>
-            );
-          })}
       </div>
 
       {showAddAreaModal && (
         <div className="modal-overlay">
           <div className="modal-card">
-            <div className="auth-header">
-              <h2>Add Dining Area</h2>
-              <p>Create a section in your restaurant (e.g. Rooftop, Main Dining, Bar).</p>
-            </div>
-            <form onSubmit={handleAddArea} className="auth-form">
-              <label className="field-label">
-                <span>Area Name</span>
+            <h2>Add Dining Area</h2>
+            <form onSubmit={handleAddArea}>
+              <div className="form-group">
+                <label>Area Name (e.g. Main Hall, Terrace, VIP)</label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. Rooftop Terrace"
+                  placeholder="Area Name"
                   value={areaName}
                   onChange={(e) => setAreaName(e.target.value)}
+                  required
                 />
-              </label>
-              <div className="form-row">
+              </div>
+              <div className="form-actions">
                 <button type="button" className="subtle-button" onClick={() => setShowAddAreaModal(false)}>
                   Cancel
                 </button>
                 <button type="submit" className="primary-action" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : 'Save Area'}
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Save Area'}
                 </button>
               </div>
             </form>
@@ -369,70 +451,84 @@ function Setup({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
       {showAddTableModal && (
         <div className="modal-overlay">
           <div className="modal-card">
-            <div className="auth-header">
-              <h2>Add Dining Table</h2>
-              <p>Add a physical table with seating capacity.</p>
-            </div>
-            <form onSubmit={handleAddTable} className="auth-form">
-              <div className="form-row">
-                <label className="field-label">
-                  <span>Table Number / Code *</span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. T-1"
-                    value={tableNumber}
-                    onChange={(e) => setTableNumber(e.target.value)}
-                  />
-                </label>
-
-                <label className="field-label">
-                  <span>Seating Capacity</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    required
-                    value={capacity}
-                    onChange={(e) => setCapacity(Number(e.target.value))}
-                  />
-                </label>
-              </div>
-
-              <label className="field-label">
-                <span>Display Name</span>
+            <h2>Add Dining Table</h2>
+            <form onSubmit={handleAddTable}>
+              <div className="form-group">
+                <label>Table Number (e.g. T-01, B-05)</label>
                 <input
                   type="text"
-                  placeholder="e.g. Table 1 (Window Side)"
+                  placeholder="T-01"
+                  value={tableNumber}
+                  onChange={(e) => setTableNumber(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Display Name (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="Table 1"
                   value={tableName}
                   onChange={(e) => setTableName(e.target.value)}
                 />
-              </label>
-
-              <label className="field-label">
-                <span>Dining Area</span>
+              </div>
+              <div className="form-group">
+                <label>Seating Capacity</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={capacity}
+                  onChange={(e) => setCapacity(Number(e.target.value))}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Dining Area</label>
                 <select value={selectedAreaId} onChange={(e) => setSelectedAreaId(e.target.value)}>
-                  <option value="">Unassigned</option>
                   {snapshot.diningAreas.map((area) => (
-                    <option value={area.id} key={area.id}>
+                    <option key={area.id} value={area.id}>
                       {area.name}
                     </option>
                   ))}
                 </select>
-              </label>
-
-              <div className="form-row">
+              </div>
+              <div className="form-actions">
                 <button type="button" className="subtle-button" onClick={() => setShowAddTableModal(false)}>
                   Cancel
                 </button>
                 <button type="submit" className="primary-action" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : 'Save Table'}
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Save Table'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      <div className="section-header">
+        <h2>Table QR Codes ({snapshot.tables.length})</h2>
+      </div>
+
+      <div className="qr-grid">
+        {snapshot.tables.map((table) => {
+          const qrUrl = `${origin}/r/${snapshot.organization.slug}/table/${table.publicToken}`;
+          return (
+            <article className="qr-card" key={table.id}>
+              <div className="qr-box">
+                <QRCodeSVG value={qrUrl} size={140} includeMargin />
+              </div>
+              <div className="qr-info">
+                <strong>{table.displayName}</strong>
+                <small>{table.capacity} Seats • {snapshot.diningAreas.find((a) => a.id === table.diningAreaId)?.name || 'General'}</small>
+                <a href={qrUrl} target="_blank" rel="noopener noreferrer" className="qr-link">
+                  Open Customer Order View &rarr;
+                </a>
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -441,36 +537,25 @@ function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSnapshot>
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
-
-  // Category Form
-  const [catName, setCatName] = useState('');
-
-  // Item Form
+  const [categoryName, setCategoryName] = useState('');
   const [itemName, setItemName] = useState('');
-  const [itemDesc, setItemDesc] = useState('');
-  const [basePrice, setBasePrice] = useState(250);
-  const [taxPercentage, setTaxPercentage] = useState(5);
+  const [itemPrice, setItemPrice] = useState('');
+  const [itemTax, setItemTax] = useState('5');
+  const [itemCategory, setItemCategory] = useState(snapshot.categories[0]?.id || '');
   const [foodType, setFoodType] = useState<'vegetarian' | 'non_vegetarian' | 'beverage' | 'vegan'>('vegetarian');
-  const [itemCategoryId, setItemCategoryId] = useState(snapshot.categories[0]?.id || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!itemCategoryId && snapshot.categories.length > 0) {
-      setItemCategoryId(snapshot.categories[0].id);
-    }
-  }, [snapshot.categories]);
-
-  const visibleItems = snapshot.menuItems.filter(
+  const filteredItems = snapshot.menuItems.filter(
     (item) => selectedCategoryId === 'all' || item.categoryId === selectedCategoryId
   );
 
   async function handleAddCategory(e: React.FormEvent) {
     e.preventDefault();
-    if (!catName.trim()) return;
+    if (!categoryName.trim()) return;
     setIsSubmitting(true);
     try {
-      await restaurantService.createMenuCategory(catName.trim(), snapshot.location.id, snapshot.organization.id);
-      setCatName('');
+      await restaurantService.createMenuCategory(categoryName.trim(), snapshot.location.id, snapshot.organization.id);
+      setCategoryName('');
       setShowAddCategoryModal(false);
       snapshot.refresh();
     } catch (err: any) {
@@ -482,21 +567,20 @@ function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSnapshot>
 
   async function handleAddItem(e: React.FormEvent) {
     e.preventDefault();
-    if (!itemName.trim() || !itemCategoryId) return;
+    if (!itemName.trim() || !itemPrice) return;
     setIsSubmitting(true);
     try {
       await restaurantService.createMenuItem({
         name: itemName.trim(),
-        description: itemDesc.trim(),
-        basePrice,
-        taxPercentage,
+        basePrice: Number(itemPrice),
+        taxPercentage: Number(itemTax),
         foodType,
-        categoryId: itemCategoryId,
+        categoryId: itemCategory || snapshot.categories[0]?.id || '',
         locationId: snapshot.location.id,
         orgId: snapshot.organization.id
       });
       setItemName('');
-      setItemDesc('');
+      setItemPrice('');
       setShowAddItemModal(false);
       snapshot.refresh();
     } catch (err: any) {
@@ -506,104 +590,41 @@ function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSnapshot>
     }
   }
 
-  async function toggleAvailability(item: MenuItem) {
-    try {
-      await restaurantService.toggleMenuItemAvailability(item.id, !item.isAvailable);
-      snapshot.refresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update item availability');
-    }
-  }
-
   return (
     <section className="stack menu-admin">
       <div className="page-title">
         <h1>Menu Management</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button className="subtle-button compact" onClick={() => setShowAddCategoryModal(true)}>
-            <Plus size={14} /> Add Category
+            + Category
           </button>
           <button className="primary-action compact" onClick={() => setShowAddItemModal(true)}>
-            <Plus size={16} /> Add Item
+            + Item
           </button>
-        </div>
-      </div>
-
-      <div className="split-layout">
-        <aside className="category-rail">
-          <CategoryButton
-            label="All"
-            count={snapshot.menuItems.length}
-            active={selectedCategoryId === 'all'}
-            onClick={() => setSelectedCategoryId('all')}
-          />
-          {snapshot.categories.map((category) => (
-            <CategoryButton
-              label={category.name}
-              count={snapshot.menuItems.filter((item) => item.categoryId === category.id).length}
-              active={selectedCategoryId === category.id}
-              onClick={() => setSelectedCategoryId(category.id)}
-              key={category.id}
-            />
-          ))}
-        </aside>
-        <div className="menu-list">
-          {visibleItems.map((item) => (
-            <article className={`menu-card admin ${!item.isAvailable ? 'muted' : ''}`} key={item.id}>
-              <div className={`food-thumb ${item.foodType}`} aria-hidden="true">
-                {item.name.slice(0, 1)}
-              </div>
-              <div className="menu-copy">
-                <h4>{item.name}</h4>
-                <p>{item.description || 'No description'}</p>
-                <span>{currency.format(item.basePrice)}</span>
-              </div>
-              <div className="item-meta">
-                <button
-                  className={`availability-badge ${item.isAvailable ? 'available' : 'off'}`}
-                  onClick={() => toggleAvailability(item)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '12px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    background: item.isAvailable ? '#dcfce7' : '#f3f4f6',
-                    color: item.isAvailable ? '#15803d' : '#6b7280',
-                    border: 'none'
-                  }}
-                >
-                  {item.isAvailable ? 'Available' : 'Unavailable'}
-                </button>
-              </div>
-            </article>
-          ))}
         </div>
       </div>
 
       {showAddCategoryModal && (
         <div className="modal-overlay">
           <div className="modal-card">
-            <div className="auth-header">
-              <h2>Add Menu Category</h2>
-              <p>e.g. Starters, Mains, Desserts, Beverages</p>
-            </div>
-            <form onSubmit={handleAddCategory} className="auth-form">
-              <label className="field-label">
-                <span>Category Name</span>
+            <h2>Add Menu Category</h2>
+            <form onSubmit={handleAddCategory}>
+              <div className="form-group">
+                <label>Category Name</label>
                 <input
                   type="text"
+                  placeholder="Starters, Main Course, Drinks..."
+                  value={categoryName}
+                  onChange={(e) => setCategoryName(e.target.value)}
                   required
-                  placeholder="e.g. Desserts"
-                  value={catName}
-                  onChange={(e) => setCatName(e.target.value)}
                 />
-              </label>
-              <div className="form-row">
+              </div>
+              <div className="form-actions">
                 <button type="button" className="subtle-button" onClick={() => setShowAddCategoryModal(false)}>
                   Cancel
                 </button>
                 <button type="submit" className="primary-action" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : 'Save Category'}
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Save Category'}
                 </button>
               </div>
             </form>
@@ -614,131 +635,225 @@ function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSnapshot>
       {showAddItemModal && (
         <div className="modal-overlay">
           <div className="modal-card">
-            <div className="auth-header">
-              <h2>Add Menu Item</h2>
-              <p>Add a dish or beverage to your menu.</p>
-            </div>
-            <form onSubmit={handleAddItem} className="auth-form">
-              <label className="field-label">
-                <span>Category</span>
-                <select value={itemCategoryId} onChange={(e) => setItemCategoryId(e.target.value)}>
-                  {snapshot.categories.map((cat) => (
-                    <option value={cat.id} key={cat.id}>
-                      {cat.name}
+            <h2>Add Menu Item</h2>
+            <form onSubmit={handleAddItem}>
+              <div className="form-group">
+                <label>Item Name</label>
+                <input
+                  type="text"
+                  placeholder="Butter Paneer, Cold Coffee..."
+                  value={itemName}
+                  onChange={(e) => setItemName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Base Price (₹)</label>
+                <input
+                  type="number"
+                  placeholder="250"
+                  value={itemPrice}
+                  onChange={(e) => setItemPrice(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Category</label>
+                <select value={itemCategory} onChange={(e) => setItemCategory(e.target.value)}>
+                  {snapshot.categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
                     </option>
                   ))}
                 </select>
-              </label>
-
-              <label className="field-label">
-                <span>Item Name *</span>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Butter Chicken"
-                  value={itemName}
-                  onChange={(e) => setItemName(e.target.value)}
-                />
-              </label>
-
-              <label className="field-label">
-                <span>Description</span>
-                <input
-                  type="text"
-                  placeholder="e.g. Rich creamy tomato gravy with tender chicken"
-                  value={itemDesc}
-                  onChange={(e) => setItemDesc(e.target.value)}
-                />
-              </label>
-
-              <div className="form-row">
-                <label className="field-label">
-                  <span>Price (INR) *</span>
-                  <input
-                    type="number"
-                    min={0}
-                    required
-                    value={basePrice}
-                    onChange={(e) => setBasePrice(Number(e.target.value))}
-                  />
-                </label>
-
-                <label className="field-label">
-                  <span>Tax (%)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={28}
-                    required
-                    value={taxPercentage}
-                    onChange={(e) => setTaxPercentage(Number(e.target.value))}
-                  />
-                </label>
               </div>
-
-              <label className="field-label">
-                <span>Food Classification</span>
+              <div className="form-group">
+                <label>Food Type</label>
                 <select value={foodType} onChange={(e) => setFoodType(e.target.value as any)}>
                   <option value="vegetarian">Vegetarian</option>
                   <option value="non_vegetarian">Non-Vegetarian</option>
                   <option value="beverage">Beverage</option>
                   <option value="vegan">Vegan</option>
                 </select>
-              </label>
-
-              <div className="form-row">
+              </div>
+              <div className="form-actions">
                 <button type="button" className="subtle-button" onClick={() => setShowAddItemModal(false)}>
                   Cancel
                 </button>
                 <button type="submit" className="primary-action" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : 'Save Item'}
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Save Item'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      <div className="customer-tabs">
+        <button
+          className={selectedCategoryId === 'all' ? 'active' : ''}
+          onClick={() => setSelectedCategoryId('all')}
+        >
+          All ({snapshot.menuItems.length})
+        </button>
+        {snapshot.categories.map((cat) => (
+          <button
+            key={cat.id}
+            className={selectedCategoryId === cat.id ? 'active' : ''}
+            onClick={() => setSelectedCategoryId(cat.id)}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="menu-list">
+        {filteredItems.map((item) => (
+          <MenuItemCard
+            item={item}
+            key={item.id}
+            action={
+              <button
+                className={`subtle-button compact ${item.isAvailable ? '' : 'danger-button'}`}
+                onClick={async () => {
+                  await restaurantService.toggleMenuItemAvailability(item.id, !item.isAvailable);
+                  snapshot.refresh();
+                }}
+              >
+                {item.isAvailable ? 'Available' : 'Out of Stock'}
+              </button>
+            }
+          />
+        ))}
+      </div>
     </section>
   );
 }
 
-function CategoryButton({
-  label,
-  count,
-  active,
-  onClick
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
+function MenuItemCard({ item, action }: { item: MenuItem; action?: JSX.Element }) {
   return (
-    <button className={`category-button ${active ? 'active' : ''}`} onClick={onClick}>
-      <span>{label}</span>
-      <b>{count}</b>
-    </button>
+    <article className={`item-card ${!item.isAvailable ? 'unavailable' : ''}`}>
+      <div className="item-details">
+        <div className="item-type">
+          <span className={`dot ${item.foodType}`} />
+          <span>{item.foodType.replace('_', ' ')}</span>
+        </div>
+        <h3>{item.name}</h3>
+        {item.description && <p>{item.description}</p>}
+        <strong>{currency.format(item.basePrice)}</strong>
+      </div>
+      {action}
+    </article>
   );
 }
 
-function MenuItemCard({ item, action, mode = 'default' }: { item: MenuItem; action?: JSX.Element; mode?: 'default' | 'admin' }) {
+function CustomerDetailsModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  isSubmitting,
+  title = 'Customer Order Details'
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (name: string, phone: string, birthdate: string) => void;
+  isSubmitting: boolean;
+  title?: string;
+}) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [birthdate, setBirthdate] = useState('');
+  const [error, setError] = useState('');
+
+  if (!isOpen) return null;
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError('Customer name is required.');
+      return;
+    }
+    setError('');
+    onSubmit(name.trim(), phone.trim(), birthdate.trim());
+  }
+
   return (
-    <article className={`menu-card ${mode} ${!item.isAvailable ? 'muted' : ''}`}>
-      <div className={`food-thumb ${item.foodType}`} aria-hidden="true">
-        {item.name.slice(0, 1)}
-      </div>
-      <div className="menu-copy">
-        <h4>{item.name}</h4>
-        {mode !== 'admin' && <p>{item.description}</p>}
-        <span>{currency.format(item.basePrice)}</span>
-      </div>
-      {action || (
-        <div className="item-meta">
-          <span className="veg-mark" />
-          <b className="availability">{item.isAvailable ? 'Available' : 'Off'}</b>
+    <div className="modal-overlay" style={{ zIndex: 100 }}>
+      <div
+        className="modal-card"
+        style={{
+          maxWidth: '420px',
+          width: '92%',
+          background: '#fff',
+          borderRadius: '16px',
+          padding: '24px',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.15)'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text)' }}>{title}</h2>
+          <button type="button" className="ghost-icon" onClick={onClose}>
+            <X size={18} />
+          </button>
         </div>
-      )}
-    </article>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {error && <div style={{ color: '#dc2626', fontSize: '0.85rem', fontWeight: 600 }}>{error}</div>}
+
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '4px', color: 'var(--text)' }}>
+              Customer Name <span style={{ color: '#dc2626' }}>*</span>
+            </label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Enter customer name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoFocus
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '4px', color: 'var(--text)' }}>
+              Phone Number <small style={{ color: 'var(--muted)', fontWeight: 400 }}>(Optional)</small>
+            </label>
+            <input
+              type="tel"
+              className="input-field"
+              placeholder="e.g. +91 9876543210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '4px', color: 'var(--text)' }}>
+              Date of Birth <small style={{ color: 'var(--muted)', fontWeight: 400 }}>(Optional)</small>
+            </label>
+            <input
+              type="date"
+              className="input-field"
+              value={birthdate}
+              onChange={(e) => setBirthdate(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+            <button type="button" className="subtle-button" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </button>
+            <button type="submit" className="primary-action" disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : 'Place Order'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -746,12 +861,7 @@ function Waiter({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
   const [selectedTableId, setSelectedTableId] = useState(snapshot.tables[0]?.id || '');
   const [cart, setCart] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!selectedTableId && snapshot.tables.length > 0) {
-      setSelectedTableId(snapshot.tables[0].id);
-    }
-  }, [snapshot.tables]);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   const selectedTable = snapshot.tables.find((table) => table.id === selectedTableId) || snapshot.tables[0];
   const cartItems = cartEntries(cart, snapshot.menuItems);
@@ -766,14 +876,21 @@ function Waiter({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
     });
   }
 
-  async function submitOrder() {
+  async function handleConfirmOrder(customerName: string, customerPhone: string, customerBirthdate: string) {
     if (!selectedTable) return;
     const items = Object.entries(cart).map(([itemId, quantity]) => ({ itemId, quantity }));
     if (!items.length) return;
     setIsSubmitting(true);
     try {
-      await restaurantService.createOrder(selectedTable.publicToken, items, 'Waiter Order');
+      await restaurantService.createOrder(
+        selectedTable.publicToken,
+        items,
+        customerName,
+        customerPhone,
+        customerBirthdate
+      );
       setCart({});
+      setShowDetailsModal(false);
       await snapshot.refresh();
       alert('Order sent to kitchen!');
     } catch (err: any) {
@@ -785,6 +902,14 @@ function Waiter({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
 
   return (
     <section className="stack waiter-screen">
+      <CustomerDetailsModal
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        onSubmit={handleConfirmOrder}
+        isSubmitting={isSubmitting}
+        title={`Table Order - ${selectedTable?.displayName || 'Guest'}`}
+      />
+
       <div className="page-title">
         <h1>Waiter Table Order</h1>
       </div>
@@ -839,7 +964,7 @@ function Waiter({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
         <button
           className="primary-action wide"
           disabled={!cartItems.length || isSubmitting}
-          onClick={submitOrder}
+          onClick={() => setShowDetailsModal(true)}
         >
           {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : 'Send to Kitchen'}
         </button>
@@ -887,48 +1012,66 @@ function Kitchen({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
       </div>
 
       {kitchenOrders.length === 0 ? (
-        <div className="flex-center" style={{ padding: '40px 0', color: 'var(--muted)' }}>
+        <div className="flex-center" style={{ padding: '40px 0', color: 'var(--muted)', textAlign: 'center' }}>
           <ChefHat size={48} />
-          <p>No active kitchen orders at the moment.</p>
+          <p style={{ marginTop: '12px' }}>No active kitchen orders at the moment.</p>
         </div>
       ) : (
-        kitchenOrders.map((order) => {
-          const table = snapshot.tables.find((item) => item.id === order.tableId);
-          const next = nextStatus(order);
-          return (
-            <article className="order-card" key={order.id}>
-              <div className="order-card-header">
-                <div>
-                  <h3>{table?.displayName || 'Guest Order'}</h3>
-                  <p>
-                    #{order.orderNumber} <span>{formatTime(order.createdAt)}</span>
-                  </p>
+        <div className="orders-list stack" style={{ gap: '12px' }}>
+          {kitchenOrders.map((order) => {
+            const table = snapshot.tables.find((item) => item.id === order.tableId);
+            const next = nextStatus(order);
+            return (
+              <article className="order-card" key={order.id} style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', background: '#fff' }}>
+                <div className="order-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.05rem' }}>
+                      {table?.displayName || 'Guest Order'}{' '}
+                      <small style={{ color: 'var(--muted)', fontWeight: 400 }}>
+                        ({order.customerName || 'Guest'})
+                      </small>
+                    </h3>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--muted)' }}>
+                      #{order.orderNumber} • <span>{formatTime(order.createdAt)}</span>
+                    </p>
+                  </div>
+                  <span className={`order-status ${order.orderStatus}`}>{statusLabel(order.orderStatus)}</span>
                 </div>
-                <span className={`order-status ${order.orderStatus}`}>{statusLabel(order.orderStatus)}</span>
-              </div>
-              <div className="order-lines">
-                {order.items.map((item) => (
-                  <p key={item.id}>
-                    {item.quantity} x {item.itemNameSnapshot}
-                  </p>
-                ))}
-              </div>
-              {next && (
-                <div className="kitchen-actions">
-                  {order.orderStatus === 'placed' && (
-                    <button onClick={() => handleStatusChange(order.id, 'confirmed')}>Confirm</button>
-                  )}
-                  <button
-                    className={next === 'ready' || order.orderStatus === 'ready' ? 'green' : 'orange'}
-                    onClick={() => handleStatusChange(order.id, next)}
-                  >
-                    {next === 'served' ? 'Ready' : statusLabel(next)}
-                  </button>
+
+                {(order.customerPhone || order.customerBirthdate) && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '4px', display: 'flex', gap: '12px' }}>
+                    {order.customerPhone && <span><Phone size={12} /> {order.customerPhone}</span>}
+                    {order.customerBirthdate && <span><Calendar size={12} /> DOB: {order.customerBirthdate}</span>}
+                  </div>
+                )}
+
+                <div className="order-lines" style={{ margin: '12px 0', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', fontSize: '0.88rem' }}>
+                  {order.items.map((item) => (
+                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>
+                      <span style={{ fontWeight: 600 }}>{item.quantity} x {item.itemNameSnapshot}</span>
+                      {item.notes && <small style={{ color: 'var(--muted)' }}>({item.notes})</small>}
+                    </div>
+                  ))}
                 </div>
-              )}
-            </article>
-          );
-        })
+                {next && (
+                  <div className="kitchen-actions" style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                    {order.orderStatus === 'placed' && (
+                      <button className="subtle-button compact" onClick={() => handleStatusChange(order.id, 'confirmed')}>
+                        Confirm
+                      </button>
+                    )}
+                    <button
+                      className={`primary-action compact ${next === 'ready' || order.orderStatus === 'ready' ? 'green' : ''}`}
+                      onClick={() => handleStatusChange(order.id, next)}
+                    >
+                      {next === 'served' ? 'Ready & Served' : statusLabel(next)}
+                    </button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
       )}
     </section>
   );
@@ -984,7 +1127,7 @@ function Billing({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
               >
                 <span>
                   <b>{table?.displayName || 'Table'}</b>
-                  <small>#{order.orderNumber}</small>
+                  <small>#{order.orderNumber} • {order.customerName || 'Guest'}</small>
                 </span>
                 <span>
                   <b>{currency.format(order.totalAmount)}</b>
@@ -1031,6 +1174,7 @@ function Billing({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
 }
 
 function Reports({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
+  const [showRevenue, setShowRevenue] = useState(true);
   const paidOrders = snapshot.orders.filter((order) => order.paymentStatus === 'paid');
   const revenue = paidOrders.reduce((sum, order) => sum + order.totalAmount, 0);
   const cancelled = snapshot.orders.filter((order) => order.orderStatus === 'cancelled').length;
@@ -1038,15 +1182,23 @@ function Reports({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
 
   return (
     <section className="stack reports-screen">
-      <div className="page-title">
+      <div className="page-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1>Sales & Analytics</h1>
-        <CalendarDays size={18} />
+        <button
+          className="eye-toggle-btn"
+          onClick={() => setShowRevenue(!showRevenue)}
+          title={showRevenue ? 'Hide Revenue' : 'Show Revenue'}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}
+        >
+          {showRevenue ? <Eye size={16} /> : <EyeOff size={16} />}
+          <span>{showRevenue ? 'Hide Revenue' : 'Show Revenue'}</span>
+        </button>
       </div>
       <div className="metric-grid two">
-        <Metric label="Total Live Revenue" value={currency.format(revenue)} tone="warm" />
+        <Metric label="Total Live Revenue" value={showRevenue ? currency.format(revenue) : '₹ ••••••'} tone="warm" />
         <Metric label="Completed Paid Orders" value={paidOrders.length.toString()} tone="violet" />
         <Metric label="Cancelled Orders" value={cancelled.toString()} tone="red" />
-        <Metric label="Avg Order Value" value={currency.format(avgOrderValue)} tone="blue" />
+        <Metric label="Avg Order Value" value={showRevenue ? currency.format(avgOrderValue) : '₹ ••••••'} tone="blue" />
       </div>
     </section>
   );
@@ -1060,6 +1212,7 @@ function CustomerOrder() {
   const [submittedOrder, setSubmittedOrder] = useState<Order | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   const cartItems = cartEntries(cart, snapshot.menuItems);
   const total = cartItems.reduce((sum, entry) => sum + entry.item.basePrice * entry.quantity, 0);
@@ -1076,16 +1229,20 @@ function CustomerOrder() {
     });
   }
 
-  async function submit() {
+  async function handleConfirmCustomerOrder(name: string, phone: string, birthdate: string) {
     if (!table) return;
     setIsSubmitting(true);
     try {
       const order = await restaurantService.createOrder(
         table.publicToken,
-        Object.entries(cart).map(([itemId, quantity]) => ({ itemId, quantity }))
+        Object.entries(cart).map(([itemId, quantity]) => ({ itemId, quantity })),
+        name,
+        phone,
+        birthdate
       );
       setSubmittedOrder(order);
       setCart({});
+      setShowDetailsModal(false);
       snapshot.refresh();
     } catch (err: any) {
       alert(err.message || 'Failed to submit order');
@@ -1096,6 +1253,14 @@ function CustomerOrder() {
 
   return (
     <div className="customer-shell">
+      <CustomerDetailsModal
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        onSubmit={handleConfirmCustomerOrder}
+        isSubmitting={isSubmitting}
+        title="Your Table Order Details"
+      />
+
       {!submittedOrder && (
         <header className="customer-hero">
           <div>
@@ -1154,7 +1319,11 @@ function CustomerOrder() {
 
       {!submittedOrder && (
         <footer className="cart-bar">
-          <button className="primary-action wide" disabled={!cartItems.length || isSubmitting} onClick={submit}>
+          <button
+            className="primary-action wide"
+            disabled={!cartItems.length || isSubmitting}
+            onClick={() => setShowDetailsModal(true)}
+          >
             {isSubmitting ? (
               <Loader2 className="animate-spin" size={18} />
             ) : (
@@ -1185,6 +1354,14 @@ function OrderConfirmation({ order, table }: { order: Order; table: DiningTable 
         <span>
           Table <b>{table?.displayName}</b>
         </span>
+        <span>
+          Customer <b>{order.customerName || 'Guest'}</b>
+        </span>
+        {order.customerPhone && (
+          <span>
+            Phone <b>{order.customerPhone}</b>
+          </span>
+        )}
         <span>
           Placed At <b>{formatTime(order.createdAt)}</b>
         </span>
@@ -1222,15 +1399,23 @@ function OrdersHistory({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> 
 
   const filteredOrders = pastOrders.filter((order) => {
     const table = snapshot.tables.find((t) => t.id === order.tableId);
-    const searchLower = searchQuery.toLowerCase();
+    const searchLower = searchQuery.trim().toLowerCase();
+    if (!searchLower) return true;
+
     const orderNumStr = order.orderNumber.toString();
+    const orderIdStr = `ord-${order.orderNumber}`.toLowerCase();
     const customerStr = (order.customerName || '').toLowerCase();
+    const phoneStr = (order.customerPhone || '').toLowerCase();
     const tableNameStr = (table?.displayName || '').toLowerCase();
+    const itemsMatch = order.items.some((item) => item.itemNameSnapshot.toLowerCase().includes(searchLower));
 
     return (
       orderNumStr.includes(searchLower) ||
+      orderIdStr.includes(searchLower) ||
       customerStr.includes(searchLower) ||
-      tableNameStr.includes(searchLower)
+      phoneStr.includes(searchLower) ||
+      tableNameStr.includes(searchLower) ||
+      itemsMatch
     );
   });
 
@@ -1250,13 +1435,19 @@ function OrdersHistory({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> 
       </div>
 
       <div className="toolbar-row" style={{ gap: '12px', flexWrap: 'wrap' }}>
-        <label className="search-field" style={{ flex: 1, minWidth: '220px' }}>
-          <Search size={16} />
+        <label className="search-field" style={{ flex: 1, minWidth: '220px', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fff', border: '1px solid var(--border)', borderRadius: '8px' }}>
+          <Search size={16} style={{ color: 'var(--muted)' }} />
           <input
-            placeholder="Search Order #, Customer, Table..."
+            style={{ border: 'none', outline: 'none', width: '100%', fontSize: '0.88rem' }}
+            placeholder="Search Order #, Customer, Phone, Dish Name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+          {searchQuery && (
+            <button type="button" className="ghost-icon" onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
+              <X size={14} />
+            </button>
+          )}
         </label>
         <div className="chip-row">
           <button className={statusFilter === 'all' ? 'active' : ''} onClick={() => setStatusFilter('all')}>
@@ -1279,9 +1470,9 @@ function OrdersHistory({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> 
 
       <div className="orders-list stack" style={{ gap: '12px' }}>
         {filteredOrders.length === 0 ? (
-          <div className="flex-center" style={{ padding: '40px 0', color: 'var(--muted)' }}>
+          <div className="flex-center" style={{ padding: '40px 0', color: 'var(--muted)', textAlign: 'center' }}>
             <ReceiptText size={48} />
-            <p>No past orders found.</p>
+            <p style={{ marginTop: '12px' }}>No past orders found.</p>
           </div>
         ) : (
           filteredOrders.map((order) => {
@@ -1297,6 +1488,12 @@ function OrdersHistory({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> 
                     <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--muted)' }}>
                       #{order.orderNumber} • {new Date(order.createdAt).toLocaleString()}
                     </p>
+                    {(order.customerPhone || order.customerBirthdate) && (
+                      <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--muted)' }}>
+                        {order.customerPhone && <span>Phone: {order.customerPhone} </span>}
+                        {order.customerBirthdate && <span>• DOB: {order.customerBirthdate}</span>}
+                      </p>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <span className={`order-status ${order.orderStatus}`}>{statusLabel(order.orderStatus)}</span>
@@ -1325,7 +1522,7 @@ function OrdersHistory({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> 
                     onClick={() => setSelectedOrderForReceipt(order)}
                     style={{ gap: '6px' }}
                   >
-                    <Printer size={14} /> View / Reprint Receipt
+                    <Printer size={14} /> View / Print Receipt
                   </button>
                 </div>
               </article>
@@ -1374,6 +1571,11 @@ function ReceiptModal({
           <div className="receipt-meta-row">
             <span>Customer: {order.customerName || 'Guest'}</span>
           </div>
+          {order.customerPhone && (
+            <div className="receipt-meta-row">
+              <span>Phone: {order.customerPhone}</span>
+            </div>
+          )}
 
           <div className="receipt-table-header">
             <span>Item</span>
@@ -1443,4 +1645,3 @@ function formatTime(value: string) {
 }
 
 export default App;
-

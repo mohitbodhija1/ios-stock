@@ -162,6 +162,8 @@ export const restaurantService = {
         orderNumber: Number(o.order_number || 0),
         tableId: o.table_id,
         customerName: o.customer_name || 'Guest',
+        customerPhone: o.customer_phone || '',
+        customerBirthdate: o.customer_birthdate || '',
         orderStatus: o.order_status,
         paymentStatus: o.payment_status,
         subtotal: Number(o.subtotal || 0),
@@ -386,10 +388,12 @@ export const restaurantService = {
   async createOrder(
     tableToken: string,
     cart: Array<{ itemId: string; quantity: number; notes?: string }>,
-    customerName?: string
+    customerName?: string,
+    customerPhone?: string,
+    customerBirthdate?: string
   ): Promise<Order> {
     if (!isSupabaseConfigured || !supabase) {
-      return this.createOrderMock(tableToken, cart, customerName);
+      return this.createOrderMock(tableToken, cart, customerName, customerPhone, customerBirthdate);
     }
 
     try {
@@ -408,7 +412,7 @@ export const restaurantService = {
 
       if (error) {
         console.warn('RPC place_customer_order error, falling back:', error.message);
-        return this.createOrderMock(tableToken, cart, customerName);
+        return this.createOrderMock(tableToken, cart, customerName, customerPhone, customerBirthdate);
       }
 
       // Fetch created order back from Supabase
@@ -419,7 +423,7 @@ export const restaurantService = {
         .single();
 
       if (!fetchedOrder) {
-        return this.createOrderMock(tableToken, cart, customerName);
+        return this.createOrderMock(tableToken, cart, customerName, customerPhone, customerBirthdate);
       }
 
       const nextOrder: Order = {
@@ -427,7 +431,9 @@ export const restaurantService = {
         publicId: fetchedOrder.public_id,
         orderNumber: Number(fetchedOrder.order_number || 1),
         tableId: fetchedOrder.table_id,
-        customerName: fetchedOrder.customer_name || 'Guest',
+        customerName: fetchedOrder.customer_name || customerName || 'Guest',
+        customerPhone: fetchedOrder.customer_phone || customerPhone || '',
+        customerBirthdate: fetchedOrder.customer_birthdate || customerBirthdate || '',
         orderStatus: fetchedOrder.order_status,
         paymentStatus: fetchedOrder.payment_status,
         subtotal: Number(fetchedOrder.subtotal || 0),
@@ -450,14 +456,16 @@ export const restaurantService = {
       return nextOrder;
     } catch (err) {
       console.error('Failed to create order via Supabase:', err);
-      return this.createOrderMock(tableToken, cart, customerName);
+      return this.createOrderMock(tableToken, cart, customerName, customerPhone, customerBirthdate);
     }
   },
 
   createOrderMock(
     tableToken: string,
     cart: Array<{ itemId: string; quantity: number; notes?: string }>,
-    customerName?: string
+    customerName?: string,
+    customerPhone?: string,
+    customerBirthdate?: string
   ): Order {
     const table = localSnapshot.tables.find((item) => item.publicToken === tableToken);
     if (!table) throw new Error('Invalid table QR code.');
@@ -487,6 +495,8 @@ export const restaurantService = {
       orderNumber: 100 + localSnapshot.orders.length + 1,
       tableId: table.id,
       customerName: customerName || 'Guest',
+      customerPhone: customerPhone || '',
+      customerBirthdate: customerBirthdate || '',
       orderStatus: 'placed',
       paymentStatus: 'pending',
       subtotal,
