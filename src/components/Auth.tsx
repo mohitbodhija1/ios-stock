@@ -59,7 +59,7 @@ export function AuthModal({ onAuthComplete }: AuthProps) {
     try {
       const snapshot = await restaurantService.fetchTenantSnapshot();
       // If organization exists, we're ready
-      if (snapshot.organization.id && snapshot.organization.name !== 'Food House Pvt. Ltd.') {
+      if (snapshot.organization.id) {
         onAuthComplete();
       } else {
         // Check if there is an org in Supabase

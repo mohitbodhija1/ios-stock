@@ -1,14 +1,4 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import {
-  categories as mockCategories,
-  diningAreas as mockDiningAreas,
-  location as mockLocation,
-  menuItems as mockMenuItems,
-  orders as mockOrders,
-  organization as mockOrganization,
-  payments as mockPayments,
-  tables as mockTables
-} from '../lib/mockData';
 import type { DiningArea, DiningTable, Location, MenuCategory, MenuItem, Order, OrderItem, Organization, Payment, OrderStatus, PaymentMethod } from '../types';
 
 export interface TenantSnapshot {
@@ -32,16 +22,16 @@ const statusFlow: Record<OrderStatus, OrderStatus[]> = {
   cancelled: []
 };
 
-// In-memory cache fallback for synchronous reads
+// In-memory cache initialized with empty defaults
 let localSnapshot: TenantSnapshot = {
-  organization: mockOrganization,
-  location: mockLocation,
-  diningAreas: mockDiningAreas,
-  tables: mockTables,
-  categories: mockCategories,
-  menuItems: mockMenuItems,
-  orders: mockOrders,
-  payments: mockPayments
+  organization: { id: '', name: '', slug: '' },
+  location: { id: '', organizationId: '', name: '', slug: '', city: '', currency: 'INR' },
+  diningAreas: [],
+  tables: [],
+  categories: [],
+  menuItems: [],
+  orders: [],
+  payments: []
 };
 
 export const restaurantService = {
