@@ -441,6 +441,70 @@ a {
   border-left: 4px solid #12a150;
 }
 
+.dashboard-history-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  padding-bottom: 8px;
+}
+
+.history-view-link {
+  color: var(--green);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.dashboard-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-history-list p {
+  margin: 0;
+  padding: 14px;
+  color: var(--muted);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.dashboard-history-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  padding: 11px;
+  color: var(--text);
+  text-decoration: none;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.dashboard-history-row.editable {
+  border-color: #bbf7d0;
+}
+
+.dashboard-history-row span {
+  display: grid;
+  gap: 4px;
+}
+
+.dashboard-history-row span:last-child {
+  text-align: right;
+}
+
+.dashboard-history-row small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.dashboard-history-row.editable span:last-child small {
+  color: var(--green);
+  font-weight: 850;
+}
+
 .table-card-top {
   display: flex;
   align-items: center;
@@ -953,6 +1017,45 @@ select,
   width: auto;
 }
 
+.kitchen-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.kitchen-summary-tile {
+  display: grid;
+  gap: 6px;
+  min-height: 82px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.04);
+}
+
+.kitchen-summary-tile span {
+  color: #475467;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.kitchen-summary-tile strong {
+  color: var(--text);
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.kitchen-summary-tile.placed {
+  background: #fff7ed;
+  border-left: 4px solid #f97316;
+}
+
+.kitchen-summary-tile.preparing {
+  background: #eff6ff;
+  border-left: 4px solid #1d5fbf;
+}
+
 .order-card {
   display: grid;
   gap: 12px;
@@ -1044,6 +1147,58 @@ select,
 .bill-row.selected {
   background: #eaf8ef;
   border-color: #12a150;
+}
+
+.billing-payment-modal {
+  display: none;
+}
+
+.billing-payment-modal-card {
+  position: relative;
+}
+
+.billing-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.billing-modal-actions {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.45fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+@media (max-width: 899px) {
+  .billing-screen > .checkout-card {
+    display: none;
+  }
+
+  .billing-payment-modal {
+    display: flex;
+    align-items: center;
+    padding: 14px;
+  }
+
+  .billing-payment-modal-card {
+    width: min(100%, 440px);
+    max-height: calc(100vh - 40px);
+    padding: 18px 14px 14px;
+    overflow-y: auto;
+  }
+
+  .billing-payment-modal-card .section-header {
+    padding-right: 38px;
+  }
 }
 
 .payment-methods {
@@ -1439,6 +1594,13 @@ select,
   }
 
   .kitchen-board .kitchen-tabs {
+    grid-column: 1 / -1;
+  }
+
+  .kitchen-board .page-title,
+  .kitchen-summary-grid,
+  .kitchen-board .orders-list,
+  .kitchen-board .flex-center {
     grid-column: 1 / -1;
   }
 
@@ -3706,6 +3868,27 @@ select,
   border-radius: 6px;
 }
 
+.menu-card-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.menu-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 25px;
+  padding: 3px 8px;
+  color: var(--green);
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
 .empty-menu-state {
   grid-column: 1 / -1;
   display: flex;
@@ -3862,6 +4045,28 @@ select,
   font-size: 0.72rem;
   font-weight: 800;
   color: #94a3b8;
+}
+
+.edit-order-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  color: #14532d;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  font-size: 0.84rem;
+}
+
+.edit-order-banner span {
+  min-width: 0;
+}
+
+.edit-order-banner .subtle-button {
+  flex: 0 0 auto;
+  min-height: 32px;
 }
 
 .pos-qty-badge-controls {

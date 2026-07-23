@@ -20,8 +20,9 @@ Apply the migration in `supabase/migrations/001_mobile_first_restaurant_mvp.sql`
 - `/` staff dashboard
 - `/setup` location, dining area, and table QR setup
 - `/menu` menu management
-- `/waiter` waiter table ordering
+- `/order` table ordering
 - `/kitchen` kitchen display
 - `/billing` manual payments
+- `/history` order history
 - `/reports` daily sales
 - `/r/food-house/table/qr-table-1` customer QR ordering demo

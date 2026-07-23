@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import {
   BookOpen,
   ChefHat,
+  ClipboardList,
   Home,
   IndianRupee,
   LogOut,
   ReceiptText,
   RefreshCw,
-  UserRound,
   Utensils,
   Building,
   Bell
@@ -100,10 +100,12 @@ export function StaffApp({
           <Route path="/" element={<Dashboard snapshot={snapshot} />} />
           <Route path="/setup" element={<Setup snapshot={snapshot} />} />
           <Route path="/menu" element={<MenuManagement snapshot={snapshot} />} />
-          <Route path="/waiter" element={<Waiter snapshot={snapshot} />} />
+          <Route path="/order" element={<Waiter snapshot={snapshot} />} />
+          <Route path="/waiter" element={<Navigate to="/app/order" replace />} />
           <Route path="/kitchen" element={<Kitchen snapshot={snapshot} />} />
           <Route path="/billing" element={<Billing snapshot={snapshot} />} />
-          <Route path="/orders" element={<OrdersHistory snapshot={snapshot} />} />
+          <Route path="/history" element={<OrdersHistory snapshot={snapshot} />} />
+          <Route path="/orders" element={<Navigate to="/app/history" replace />} />
           <Route path="/reports" element={<Reports snapshot={snapshot} />} />
         </Routes>
       </main>
@@ -111,10 +113,10 @@ export function StaffApp({
       <nav className="bottom-nav" aria-label="Primary">
         <NavItem to="/app" icon={<Home size={18} />} label="Home" />
         <NavItem to="/app/menu" icon={<BookOpen size={18} />} label="Menu" />
-        <NavItem to="/app/waiter" icon={<UserRound size={18} />} label="Waiter" />
+        <NavItem to="/app/order" icon={<ClipboardList size={18} />} label="Order" />
         <NavItem to="/app/kitchen" icon={<ChefHat size={18} />} label="Kitchen" />
         <NavItem to="/app/billing" icon={<IndianRupee size={18} />} label="Pay" />
-        <NavItem to="/app/orders" icon={<ReceiptText size={18} />} label="Orders" />
+        <NavItem to="/app/history" icon={<ReceiptText size={18} />} label="History" />
       </nav>
     </div>
   );

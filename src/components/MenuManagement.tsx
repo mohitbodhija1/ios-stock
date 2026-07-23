@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, BookOpen, Loader2, X, ImagePlus } from 'lucide-react';
+import { Search, BookOpen, Loader2, X, ImagePlus, Pencil } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { restaurantService } from '../services/restaurantService';
 import { currency } from '../utils/formatters';
@@ -13,11 +13,12 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [editingItemId, setEditingItemId] = useState('');
   const [showAddTableModal, setShowAddTableModal] = useState(false);
   const [categoryName, setCategoryName] = useState('');
   const [itemName, setItemName] = useState('');
   const [itemPrice, setItemPrice] = useState('');
-  const [itemTax, setItemTax] = useState('5');
+  const [itemTax, setItemTax] = useState('0');
   const [itemCategory, setItemCategory] = useState(snapshot.categories[0]?.id || '');
   const [foodType, setFoodType] = useState<'vegetarian' | 'non_vegetarian' | 'beverage' | 'vegan'>('vegetarian');
   const [tableNumber, setTableNumber] = useState('');
@@ -38,6 +39,39 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
     const reader = new FileReader();
     reader.onload = (ev) => setItemImagePreview(ev.target?.result as string);
     reader.readAsDataURL(file);
+  }
+
+  function resetItemForm() {
+    setItemName('');
+    setItemPrice('');
+    setItemTax('0');
+    setItemCategory(snapshot.categories[0]?.id || '');
+    setFoodType('vegetarian');
+    setItemImageFile(null);
+    setItemImagePreview('');
+    setEditingItemId('');
+  }
+
+  function openAddItemModal() {
+    resetItemForm();
+    setShowAddItemModal(true);
+  }
+
+  function openEditItemModal(item: MenuItem) {
+    setEditingItemId(item.id);
+    setItemName(item.name);
+    setItemPrice(String(item.basePrice));
+    setItemTax(String(item.taxPercentage));
+    setItemCategory(item.categoryId);
+    setFoodType(item.foodType);
+    setItemImageFile(null);
+    setItemImagePreview(item.imageUrl || '');
+    setShowAddItemModal(true);
+  }
+
+  function closeItemModal() {
+    setShowAddItemModal(false);
+    resetItemForm();
   }
 
   useEffect(() => {
@@ -76,34 +110,40 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
     }
   }
 
-  async function handleAddItem(e: React.FormEvent) {
+  async function handleSaveItem(e: React.FormEvent) {
     e.preventDefault();
     if (!itemName.trim() || !itemPrice) return;
     setIsSubmitting(true);
     try {
+      const wasEditing = Boolean(editingItemId);
       let imageUrl: string | undefined;
       if (itemImageFile) {
         imageUrl = await restaurantService.uploadMenuItemImage(itemImageFile, snapshot.organization.id);
       }
-      await restaurantService.createMenuItem({
+      const itemPayload = {
         name: itemName.trim(),
         basePrice: Number(itemPrice),
         taxPercentage: Number(itemTax),
         foodType,
         categoryId: itemCategory || snapshot.categories[0]?.id || '',
         locationId: snapshot.location.id,
-        orgId: snapshot.organization.id,
         imageUrl
-      });
-      setItemName('');
-      setItemPrice('');
-      setItemImageFile(null);
-      setItemImagePreview('');
-      setShowAddItemModal(false);
+      };
+
+      if (editingItemId) {
+        await restaurantService.updateMenuItem(editingItemId, itemPayload);
+      } else {
+        await restaurantService.createMenuItem({
+          ...itemPayload,
+          orgId: snapshot.organization.id
+        });
+      }
+
+      closeItemModal();
       snapshot.refresh();
-      toast.success('Menu item added successfully!');
+      toast.success(wasEditing ? 'Menu item updated successfully!' : 'Menu item added successfully!');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to add item');
+      toast.error(err.message || 'Failed to save item');
     } finally {
       setIsSubmitting(false);
     }
@@ -169,7 +209,7 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
           <button className="subtle-button compact" onClick={() => setShowQRModal(true)}>
             Menu QR
           </button>
-          <button className="primary-action compact" onClick={() => setShowAddItemModal(true)}>
+          <button className="primary-action compact" onClick={openAddItemModal}>
             + Item
           </button>
         </div>
@@ -332,8 +372,8 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
       {showAddItemModal && (
         <div className="modal-overlay">
           <div className="modal-card">
-            <h2>Add Menu Item</h2>
-            <form onSubmit={handleAddItem}>
+            <h2>{editingItemId ? 'Edit Menu Item' : 'Add Menu Item'}</h2>
+            <form onSubmit={handleSaveItem}>
               <div className="form-group">
                 <label>Item Name</label>
                 <input
@@ -352,6 +392,18 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
                   value={itemPrice}
                   onChange={(e) => setItemPrice(e.target.value)}
                   required
+                />
+              </div>
+              <div className="form-group">
+                <label>Tax Percentage (%)</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={itemTax}
+                  onChange={(e) => setItemTax(e.target.value)}
                 />
               </div>
               <div className="form-group">
@@ -402,11 +454,11 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
                 )}
               </div>
               <div className="form-actions">
-                <button type="button" className="subtle-button" onClick={() => { setShowAddItemModal(false); setItemImageFile(null); setItemImagePreview(''); }}>
+                <button type="button" className="subtle-button" onClick={closeItemModal}>
                   Cancel
                 </button>
                 <button type="submit" className="primary-action" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Save Item'}
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : editingItemId ? 'Update Item' : 'Save Item'}
                 </button>
               </div>
             </form>
@@ -487,9 +539,15 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
                   <span className="price-val">{currency.format(item.basePrice)}</span>
                   <small className="tax-note">+{item.taxPercentage}% tax</small>
                 </div>
-                <span className="category-tag">
-                  {snapshot.categories.find((c) => c.id === item.categoryId)?.name || 'General'}
-                </span>
+                <div className="menu-card-footer-actions">
+                  <span className="category-tag">
+                    {snapshot.categories.find((c) => c.id === item.categoryId)?.name || 'General'}
+                  </span>
+                  <button className="menu-edit-btn" type="button" onClick={() => openEditItemModal(item)}>
+                    <Pencil size={13} />
+                    Edit
+                  </button>
+                </div>
               </div>
             </article>
           ))

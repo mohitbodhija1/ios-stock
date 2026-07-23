@@ -358,6 +358,57 @@ export const restaurantService = {
     return data;
   },
 
+  async updateMenuItem(
+    itemId: string,
+    updates: {
+      name: string;
+      description?: string;
+      basePrice: number;
+      taxPercentage: number;
+      foodType: 'vegetarian' | 'non_vegetarian' | 'beverage' | 'vegan';
+      categoryId: string;
+      locationId: string;
+      imageUrl?: string;
+    }
+  ) {
+    if (!isSupabaseConfigured || !supabase) {
+      const item = localSnapshot.menuItems.find((menuItem) => menuItem.id === itemId);
+      if (!item) throw new Error('Menu item not found.');
+      item.name = updates.name;
+      item.description = updates.description || '';
+      item.basePrice = updates.basePrice;
+      item.taxPercentage = updates.taxPercentage;
+      item.foodType = updates.foodType;
+      item.categoryId = updates.categoryId;
+      if (updates.imageUrl) item.imageUrl = updates.imageUrl;
+      return item;
+    }
+
+    const payload: Record<string, any> = {
+      category_id: updates.categoryId,
+      name: updates.name,
+      description: updates.description || '',
+      base_price: updates.basePrice,
+      tax_percentage: updates.taxPercentage,
+      food_type: updates.foodType
+    };
+
+    if (updates.imageUrl) {
+      payload.image_url = updates.imageUrl;
+    }
+
+    const { data, error } = await supabase
+      .from('menu_items')
+      .update(payload)
+      .eq('id', itemId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    await this.fetchTenantSnapshot(updates.locationId);
+    return data;
+  },
+
   async uploadMenuItemImage(file: File, orgId: string): Promise<string> {
     if (!isSupabaseConfigured || !supabase) {
       // Return a local object URL as fallback when Supabase is not configured
@@ -517,6 +568,70 @@ export const restaurantService = {
     localSnapshot.orders.unshift(nextOrder);
     table.status = 'occupied';
     return nextOrder;
+  },
+
+  async updateOrderItems(
+    orderId: string,
+    cart: Array<{ itemId: string; quantity: number; notes?: string }>
+  ): Promise<Order> {
+    if (!cart.length) throw new Error('Add at least one item to update the order.');
+
+    if (!isSupabaseConfigured || !supabase) {
+      return this.updateOrderItemsMock(orderId, cart);
+    }
+
+    try {
+      const formattedItems = cart.map((c) => ({
+        menu_item_id: c.itemId,
+        quantity: c.quantity,
+        notes: c.notes || ''
+      }));
+
+      const { error } = await supabase.rpc('update_order_items', {
+        target_order_id: orderId,
+        order_items: formattedItems
+      });
+
+      if (error) throw error;
+
+      await this.fetchTenantSnapshot();
+      const updatedOrder = localSnapshot.orders.find((order) => order.id === orderId);
+      if (!updatedOrder) throw new Error('Updated order not found.');
+      return updatedOrder;
+    } catch (err: any) {
+      throw new Error(err.message || 'Order update failed.');
+    }
+  },
+
+  updateOrderItemsMock(orderId: string, cart: Array<{ itemId: string; quantity: number; notes?: string }>): Order {
+    const order = localSnapshot.orders.find((item) => item.id === orderId);
+    if (!order) throw new Error('Order not found.');
+    if (order.paymentStatus === 'paid' || ['completed', 'cancelled'].includes(order.orderStatus)) {
+      throw new Error('Only active unpaid orders can be updated.');
+    }
+
+    const selectedItems: OrderItem[] = cart.map((cartItem) => {
+      const menuItem = localSnapshot.menuItems.find((item) => item.id === cartItem.itemId && item.isAvailable);
+      if (!menuItem) throw new Error('One or more menu items are unavailable.');
+      const quantity = Math.max(1, cartItem.quantity);
+      const unitTax = Math.round(menuItem.basePrice * (menuItem.taxPercentage / 100));
+      return {
+        id: crypto.randomUUID(),
+        menuItemId: menuItem.id,
+        itemNameSnapshot: menuItem.name,
+        quantity,
+        unitPrice: menuItem.basePrice,
+        taxAmount: unitTax * quantity,
+        totalAmount: (menuItem.basePrice + unitTax) * quantity,
+        notes: cartItem.notes
+      };
+    });
+
+    order.items = selectedItems;
+    order.subtotal = selectedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    order.taxAmount = selectedItems.reduce((sum, item) => sum + item.taxAmount, 0);
+    order.totalAmount = order.subtotal + order.taxAmount;
+    return order;
   },
 
   async changeOrderStatus(orderId: string, nextStatus: OrderStatus) {

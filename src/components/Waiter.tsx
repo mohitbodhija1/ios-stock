@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Minus, Plus, Loader2 } from 'lucide-react';
 import { restaurantService } from '../services/restaurantService';
 import { currency, cartEntries } from '../utils/formatters';
@@ -8,21 +9,42 @@ import type { useSnapshot } from '../hooks/useSnapshot';
 
 export function Waiter({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const [selectedTableId, setSelectedTableId] = useState(snapshot.tables[0]?.id || '');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [editingOrderId, setEditingOrderId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tableParam = params.get('table');
+    const orderParam = params.get('order');
+
+    if (orderParam) {
+      const order = snapshot.orders.find((item) => item.id === orderParam);
+      if (order) {
+        setEditingOrderId(order.id);
+        setSelectedTableId(order.tableId);
+        setCart(
+          order.items.reduce<Record<string, number>>((nextCart, item) => {
+            nextCart[item.menuItemId] = item.quantity;
+            return nextCart;
+          }, {})
+        );
+      }
+      return;
+    }
+
+    setEditingOrderId('');
     if (tableParam && snapshot.tables.some((t) => t.id === tableParam)) {
       setSelectedTableId(tableParam);
     }
-  }, [snapshot.tables]);
+  }, [snapshot.orders, snapshot.tables]);
 
   const selectedTable = snapshot.tables.find((table) => table.id === selectedTableId) || snapshot.tables[0];
+  const editingOrder = snapshot.orders.find((order) => order.id === editingOrderId);
   const cartItems = cartEntries(cart, snapshot.menuItems);
   const total = cartItems.reduce((sum, entry) => sum + entry.item.basePrice * entry.quantity, 0);
 
@@ -47,17 +69,23 @@ export function Waiter({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> 
     if (!items.length) return;
     setIsSubmitting(true);
     try {
-      await restaurantService.createOrder(
-        selectedTable.publicToken,
-        items,
-        customerName,
-        customerPhone,
-        customerBirthdate
-      );
+      if (editingOrderId) {
+        await restaurantService.updateOrderItems(editingOrderId, items);
+      } else {
+        await restaurantService.createOrder(
+          selectedTable.publicToken,
+          items,
+          customerName,
+          customerPhone,
+          customerBirthdate
+        );
+      }
       setCart({});
+      setEditingOrderId('');
       setShowDetailsModal(false);
       await snapshot.refresh();
-      toast.success('Order sent to kitchen!');
+      toast.success(editingOrderId ? 'Order updated successfully!' : 'Order sent to kitchen!');
+      navigate('/app');
     } catch (err: any) {
       toast.error(err.message || 'Failed to submit order');
     } finally {
@@ -74,6 +102,25 @@ export function Waiter({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> 
         isSubmitting={isSubmitting}
         title={`Table Order - ${selectedTable?.displayName || 'Guest'}`}
       />
+
+      {editingOrder && (
+        <div className="edit-order-banner">
+          <span>
+            Editing Order <b>#{editingOrder.orderNumber}</b> for <b>{selectedTable?.displayName}</b>
+          </span>
+          <button
+            className="subtle-button"
+            type="button"
+            onClick={() => {
+              setEditingOrderId('');
+              setCart({});
+              window.history.replaceState(null, '', '/app/order');
+            }}
+          >
+            New Order
+          </button>
+        </div>
+      )}
 
       {/* Row 1: Tables selection row */}
       <div className="table-chips-row" style={{ width: '100%', display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
@@ -158,9 +205,12 @@ export function Waiter({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> 
               className="primary-action"
               style={{ flex: 1 }}
               disabled={isSubmitting}
-              onClick={() => setShowDetailsModal(true)}
+              onClick={() => {
+                if (editingOrderId) handleConfirmOrder('', '', '');
+                else setShowDetailsModal(true);
+              }}
             >
-              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : 'Place Order →'}
+              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : editingOrderId ? 'Update Order' : 'Place Order →'}
             </button>
           </div>
         </article>

@@ -8,9 +8,11 @@ import type { Order, OrderStatus } from '../types';
 
 export function Kitchen({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
   const toast = useToast();
-  const kitchenOrders = snapshot.orders.filter((order) =>
-    ['placed', 'confirmed', 'preparing', 'ready'].includes(order.orderStatus)
-  );
+  const kitchenOrders = snapshot.orders
+    .filter((order) => ['placed', 'confirmed', 'preparing', 'ready'].includes(order.orderStatus))
+    .sort((first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime());
+  const placedCount = kitchenOrders.filter((order) => order.orderStatus === 'placed').length;
+  const preparingCount = kitchenOrders.filter((order) => order.orderStatus === 'preparing').length;
 
   function nextStatus(order: Order): OrderStatus | null {
     if (order.orderStatus === 'placed') return 'confirmed';
@@ -34,6 +36,17 @@ export function Kitchen({ snapshot }: { snapshot: ReturnType<typeof useSnapshot>
     <section className="stack kitchen-board">
       <div className="page-title">
         <h1>Kitchen Display System (Realtime)</h1>
+      </div>
+
+      <div className="kitchen-summary-grid">
+        <article className="kitchen-summary-tile placed">
+          <span>Placed</span>
+          <strong>{placedCount}</strong>
+        </article>
+        <article className="kitchen-summary-tile preparing">
+          <span>Preparing</span>
+          <strong>{preparingCount}</strong>
+        </article>
       </div>
 
       {kitchenOrders.length === 0 ? (
