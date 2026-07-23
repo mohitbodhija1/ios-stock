@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import type { AdminOnboardResult, AdminOrganization } from '../types';
+import type { AdminOnboardResult, AdminOrganization, AdminUser } from '../types';
 
 export const adminService = {
   async isPlatformAdmin(): Promise<boolean> {
@@ -13,6 +13,26 @@ export const adminService = {
       return false;
     }
     return Boolean(data);
+  },
+
+  async fetchAllUsers(): Promise<AdminUser[]> {
+    if (!isSupabaseConfigured || !supabase) {
+      return [];
+    }
+
+    const { data, error } = await supabase.rpc('admin_list_users');
+    if (error) throw error;
+
+    return (data || []).map((user: any) => ({
+      userId: user.user_id,
+      email: user.email,
+      fullName: user.full_name,
+      createdAt: user.created_at
+    }));
+  },
+
+  formatUserLabel(user: AdminUser) {
+    return user.fullName ? `${user.fullName} (${user.email})` : user.email;
   },
 
   async fetchAllOrganizations(): Promise<AdminOrganization[]> {
@@ -81,6 +101,7 @@ export const adminService = {
     locationSlug: string;
     city?: string;
     ownerEmail?: string;
+    ownerUserId?: string;
     orgEmail?: string;
     orgPhone?: string;
   }): Promise<AdminOnboardResult> {
@@ -95,6 +116,7 @@ export const adminService = {
       location_slug: input.locationSlug,
       city: input.city || null,
       owner_email: input.ownerEmail?.trim() || null,
+      selected_owner_user_id: input.ownerUserId || null,
       org_email: input.orgEmail?.trim() || null,
       org_phone: input.orgPhone?.trim() || null
     });
@@ -108,6 +130,20 @@ export const adminService = {
       ownerUserId: row.owner_user_id,
       ownerAssigned: row.owner_assigned
     };
+  },
+
+  async assignOwnerByUserId(organizationId: string, ownerUserId: string): Promise<string> {
+    if (!isSupabaseConfigured || !supabase) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    const { data, error } = await supabase.rpc('admin_assign_owner_by_user_id', {
+      target_org_id: organizationId,
+      owner_user_id: ownerUserId
+    });
+
+    if (error) throw error;
+    return data as string;
   },
 
   async assignOwner(organizationId: string, ownerEmail: string): Promise<string> {

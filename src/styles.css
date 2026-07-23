@@ -4822,6 +4822,22 @@ select,
   font-size: 0.88rem;
 }
 
+.admin-user-select {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+}
+
+.admin-user-select:focus {
+  background: #fff;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(7, 136, 63, 0.12);
+}
+
 @media (max-width: 720px) {
   .admin-hero {
     flex-direction: column;

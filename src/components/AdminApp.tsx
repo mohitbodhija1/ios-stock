@@ -15,7 +15,37 @@ import {
 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { adminService } from '../services/adminService';
-import type { AdminOrganization } from '../types';
+import type { AdminOrganization, AdminUser } from '../types';
+
+function UserSelect({
+  users,
+  value,
+  onChange,
+  required = false,
+  placeholder = 'Select a user'
+}: {
+  users: AdminUser[];
+  value: string;
+  onChange: (userId: string) => void;
+  required?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <select
+      className="admin-user-select"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      required={required}
+    >
+      <option value="">{placeholder}</option>
+      {users.map((user) => (
+        <option key={user.userId} value={user.userId}>
+          {adminService.formatUserLabel(user)}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -34,11 +64,12 @@ export function AdminApp({
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [organizations, setOrganizations] = useState<AdminOrganization[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [showOnboardForm, setShowOnboardForm] = useState(false);
   const [assigningOrgId, setAssigningOrgId] = useState<string | null>(null);
-  const [assignEmail, setAssignEmail] = useState('');
+  const [assignUserId, setAssignUserId] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -47,7 +78,7 @@ export function AdminApp({
   const [locName, setLocName] = useState('Main Branch');
   const [locSlug, setLocSlug] = useState('main');
   const [city, setCity] = useState('Delhi');
-  const [ownerEmail, setOwnerEmail] = useState('');
+  const [ownerUserId, setOwnerUserId] = useState('');
   const [orgEmail, setOrgEmail] = useState('');
   const [orgPhone, setOrgPhone] = useState('');
 
@@ -57,6 +88,7 @@ export function AdminApp({
       if (!isSupabaseConfigured || !supabase) {
         setIsAdmin(localStorage.getItem('demo_platform_admin') === 'true');
         setOrganizations([]);
+        setUsers([]);
         return;
       }
 
@@ -70,8 +102,12 @@ export function AdminApp({
       setIsAdmin(admin);
 
       if (admin) {
-        const orgs = await adminService.fetchAllOrganizations();
+        const [orgs, allUsers] = await Promise.all([
+          adminService.fetchAllOrganizations(),
+          adminService.fetchAllUsers()
+        ]);
         setOrganizations(orgs);
+        setUsers(allUsers);
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to load admin data.');
@@ -108,23 +144,25 @@ export function AdminApp({
       const slugifiedOrg = orgSlug || slugify(orgName);
       const slugifiedLoc = locSlug || slugify(locName);
 
+      const selectedOwner = users.find((user) => user.userId === ownerUserId);
+
       const result = await adminService.onboardRestaurant({
         orgName,
         orgSlug: slugifiedOrg,
         locationName: locName,
         locationSlug: slugifiedLoc,
         city,
-        ownerEmail: ownerEmail || undefined,
+        ownerUserId: ownerUserId || undefined,
         orgEmail: orgEmail || undefined,
         orgPhone: orgPhone || undefined
       });
 
       if (result.ownerAssigned) {
-        setSuccessMsg(`Restaurant "${orgName}" created and owner assigned successfully.`);
-      } else if (ownerEmail) {
         setSuccessMsg(
-          `Restaurant "${orgName}" created. Owner email not registered yet — assign owner after they sign up.`
+          `Restaurant "${orgName}" created and ${selectedOwner ? adminService.formatUserLabel(selectedOwner) : 'owner'} assigned successfully.`
         );
+      } else if (ownerUserId) {
+        setSuccessMsg(`Restaurant "${orgName}" created, but the selected owner could not be assigned.`);
       } else {
         setSuccessMsg(`Restaurant "${orgName}" created. Assign an owner when ready.`);
       }
@@ -135,7 +173,7 @@ export function AdminApp({
       setLocName('Main Branch');
       setLocSlug('main');
       setCity('Delhi');
-      setOwnerEmail('');
+      setOwnerUserId('');
       setOrgEmail('');
       setOrgPhone('');
       await loadData();
@@ -155,14 +193,19 @@ export function AdminApp({
     setIsSubmitting(true);
 
     try {
-      await adminService.assignOwner(assigningOrgId, assignEmail);
-      setSuccessMsg(`Owner ${assignEmail} assigned successfully.`);
+      const selectedUser = users.find((user) => user.userId === assignUserId);
+      if (!selectedUser) {
+        throw new Error('Please select a user.');
+      }
+
+      await adminService.assignOwnerByUserId(assigningOrgId, assignUserId);
+      setSuccessMsg(`${adminService.formatUserLabel(selectedUser)} assigned as owner successfully.`);
       setAssigningOrgId(null);
-      setAssignEmail('');
+      setAssignUserId('');
       await loadData();
     } catch (err: any) {
       const message = err.message?.includes('owner_user_not_found')
-        ? 'No account found for that email. Ask the owner to register first.'
+        ? 'Selected user no longer exists.'
         : err.message || 'Failed to assign owner.';
       setErrorMsg(message);
     } finally {
@@ -218,6 +261,8 @@ export function AdminApp({
       </div>
     );
   }
+
+  const userById = Object.fromEntries(users.map((user) => [user.userId, user]));
 
   return (
     <div className="admin-shell">
@@ -336,7 +381,9 @@ export function AdminApp({
                         </td>
                         <td>
                           {owner ? (
-                            owner.fullName || 'Owner assigned'
+                            userById[owner.userId]
+                              ? adminService.formatUserLabel(userById[owner.userId])
+                              : owner.fullName || 'Owner assigned'
                           ) : (
                             <span className="admin-pending-badge">No owner</span>
                           )}
@@ -350,7 +397,7 @@ export function AdminApp({
                               className="link-button"
                               onClick={() => {
                                 setAssigningOrgId(org.id);
-                                setAssignEmail('');
+                                setAssignUserId('');
                                 setErrorMsg('');
                                 setSuccessMsg('');
                               }}
@@ -426,15 +473,15 @@ export function AdminApp({
               </div>
 
               <label className="field-label">
-                <span>Owner Email</span>
-                <input
-                  type="email"
-                  placeholder="owner@restaurant.com"
-                  value={ownerEmail}
-                  onChange={(e) => setOwnerEmail(e.target.value)}
+                <span>Assign Owner</span>
+                <UserSelect
+                  users={users}
+                  value={ownerUserId}
+                  onChange={setOwnerUserId}
+                  placeholder="Select owner (optional)"
                 />
                 <small className="field-hint">
-                  If the owner already has an account, they&apos;ll be linked automatically.
+                  Choose a registered user to link as the restaurant owner.
                 </small>
               </label>
 
@@ -488,15 +535,17 @@ export function AdminApp({
               </div>
 
               <label className="field-label">
-                <span>Owner Email *</span>
-                <input
-                  type="email"
+                <span>Assign Owner *</span>
+                <UserSelect
+                  users={users}
+                  value={assignUserId}
+                  onChange={setAssignUserId}
                   required
-                  placeholder="owner@restaurant.com"
-                  value={assignEmail}
-                  onChange={(e) => setAssignEmail(e.target.value)}
-                  autoFocus
+                  placeholder="Select a user"
                 />
+                {users.length === 0 && (
+                  <small className="field-hint">No registered users found. Ask the owner to sign up first.</small>
+                )}
               </label>
 
               <div className="admin-modal-actions">

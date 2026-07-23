@@ -122,3 +122,10 @@ export interface AdminOnboardResult {
   ownerUserId: string | null;
   ownerAssigned: boolean;
 }
+
+export interface AdminUser {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  createdAt: string;
+}
