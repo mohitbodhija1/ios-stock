@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, BookOpen, Loader2, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, BookOpen, Loader2, X, ImagePlus } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { restaurantService } from '../services/restaurantService';
 import { currency } from '../utils/formatters';
@@ -27,6 +27,18 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
   const [showQRModal, setShowQRModal] = useState(false);
   const [selectedQRTableId, setSelectedQRTableId] = useState(snapshot.tables[0]?.id || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [itemImageFile, setItemImageFile] = useState<File | null>(null);
+  const [itemImagePreview, setItemImagePreview] = useState<string>('');
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setItemImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setItemImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }
 
   useEffect(() => {
     if (!selectedAreaId && snapshot.diningAreas.length > 0) {
@@ -69,6 +81,10 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
     if (!itemName.trim() || !itemPrice) return;
     setIsSubmitting(true);
     try {
+      let imageUrl: string | undefined;
+      if (itemImageFile) {
+        imageUrl = await restaurantService.uploadMenuItemImage(itemImageFile, snapshot.organization.id);
+      }
       await restaurantService.createMenuItem({
         name: itemName.trim(),
         basePrice: Number(itemPrice),
@@ -76,10 +92,13 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
         foodType,
         categoryId: itemCategory || snapshot.categories[0]?.id || '',
         locationId: snapshot.location.id,
-        orgId: snapshot.organization.id
+        orgId: snapshot.organization.id,
+        imageUrl
       });
       setItemName('');
       setItemPrice('');
+      setItemImageFile(null);
+      setItemImagePreview('');
       setShowAddItemModal(false);
       snapshot.refresh();
       toast.success('Menu item added successfully!');
@@ -354,8 +373,36 @@ export function MenuManagement({ snapshot }: { snapshot: ReturnType<typeof useSn
                   <option value="vegan">Vegan</option>
                 </select>
               </div>
+              <div className="form-group">
+                <label>Item Photo (optional)</label>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleImagePick}
+                />
+                {itemImagePreview ? (
+                  <div className="img-upload-preview" onClick={() => imageInputRef.current?.click()}>
+                    <img src={itemImagePreview} alt="Preview" />
+                    <button
+                      type="button"
+                      className="img-remove-btn"
+                      onClick={(e) => { e.stopPropagation(); setItemImageFile(null); setItemImagePreview(''); }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="img-upload-zone" onClick={() => imageInputRef.current?.click()}>
+                    <ImagePlus size={22} color="var(--muted)" />
+                    <span>Click to upload food photo</span>
+                    <small>JPG, PNG, WebP — max 5MB</small>
+                  </div>
+                )}
+              </div>
               <div className="form-actions">
-                <button type="button" className="subtle-button" onClick={() => setShowAddItemModal(false)}>
+                <button type="button" className="subtle-button" onClick={() => { setShowAddItemModal(false); setItemImageFile(null); setItemImagePreview(''); }}>
                   Cancel
                 </button>
                 <button type="submit" className="primary-action" disabled={isSubmitting}>

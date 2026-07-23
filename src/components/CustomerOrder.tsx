@@ -1,31 +1,130 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, Check, Loader2 } from 'lucide-react';
+import {
+  CheckCircle2, Check, Loader2, ChevronLeft,
+  Search, SlidersHorizontal, ShoppingBag, Leaf
+} from 'lucide-react';
 import { restaurantService } from '../services/restaurantService';
 import { currency, cartEntries, statusLabel, formatTime } from '../utils/formatters';
-import { MenuItemCard } from './MenuManagement';
 import { QuantityControl } from './Waiter';
 import { CustomerDetailsModal } from './CustomerDetailsModal';
 import { useSnapshot } from '../hooks/useSnapshot';
 import { useToast } from './Toast';
-import type { Order, DiningTable, OrderStatus } from '../types';
+import type { Order, DiningTable, MenuItem, OrderStatus } from '../types';
 
+// --- Veg / Non-veg badge ---
+function VegBadge({ foodType }: { foodType: MenuItem['foodType'] }) {
+  const isVeg = foodType === 'vegetarian' || foodType === 'vegan';
+  const isBev = foodType === 'beverage';
+  const color = isBev ? '#2563eb' : isVeg ? '#16a34a' : '#92400e';
+  return (
+    <span
+      className="co-veg-badge"
+      style={{ borderColor: color }}
+      title={foodType.replace('_', ' ')}
+    >
+      <span style={{ background: color }} />
+    </span>
+  );
+}
+
+// --- Gradient placeholder for items without an image ---
+function ImagePlaceholder({ name, foodType }: { name: string; foodType: MenuItem['foodType'] }) {
+  const isVeg = foodType === 'vegetarian' || foodType === 'vegan';
+  const isBev = foodType === 'beverage';
+  const gradient = isBev
+    ? 'linear-gradient(135deg, #1e40af, #3b82f6)'
+    : isVeg
+    ? 'linear-gradient(135deg, #14532d, #22c55e)'
+    : 'linear-gradient(135deg, #7c2d12, #f97316)';
+  return (
+    <div className="co-card-img co-card-img-placeholder" style={{ background: gradient }}>
+      <span>{name.charAt(0).toUpperCase()}</span>
+    </div>
+  );
+}
+
+// --- Single menu item card ---
+function CustomerMenuCard({
+  item,
+  qty,
+  onAdd,
+  onMinus,
+  onPlus,
+}: {
+  item: MenuItem;
+  qty: number;
+  onAdd: () => void;
+  onMinus: () => void;
+  onPlus: () => void;
+}) {
+  return (
+    <div className={`co-card ${!item.isAvailable ? 'co-card-unavailable' : ''}`}>
+      {/* Left image */}
+      {item.imageUrl ? (
+        <img className="co-card-img" src={item.imageUrl} alt={item.name} />
+      ) : (
+        <ImagePlaceholder name={item.name} foodType={item.foodType} />
+      )}
+
+      {/* Right content */}
+      <div className="co-card-body">
+        <div className="co-card-title-row">
+          <div className="co-card-name-group">
+            <VegBadge foodType={item.foodType} />
+            <span className="co-card-name">{item.name}</span>
+          </div>
+          <span className="co-card-price">{currency.format(item.basePrice)}</span>
+        </div>
+
+        {item.description && (
+          <p className="co-card-desc">{item.description}</p>
+        )}
+
+        <div className="co-card-footer">
+          <span />
+          {item.isAvailable ? (
+            qty > 0 ? (
+              <div className="co-stepper">
+                <button onClick={onMinus}>−</button>
+                <span>{qty}</span>
+                <button onClick={onPlus}>+</button>
+              </div>
+            ) : (
+              <button className="co-add-btn" onClick={onAdd}>Add</button>
+            )
+          ) : (
+            <span className="co-unavailable-label">Unavailable</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Main customer order screen ---
 export function CustomerOrder() {
   const toast = useToast();
   const { tableToken } = useParams();
   const snapshot = useSnapshot();
   const table = snapshot.tables.find((item) => item.publicToken === tableToken) || snapshot.tables[0];
+
   const [cart, setCart] = useState<Record<string, number>>({});
   const [submittedOrder, setSubmittedOrder] = useState<Order | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   const cartItems = cartEntries(cart, snapshot.menuItems);
   const total = cartItems.reduce((sum, entry) => sum + entry.item.basePrice * entry.quantity, 0);
-  const visibleItems = snapshot.menuItems.filter(
-    (item) => item.isAvailable && (selectedCategoryId === 'all' || item.categoryId === selectedCategoryId)
-  );
+  const totalQuantity = cartItems.reduce((sum, entry) => sum + entry.quantity, 0);
+
+  const visibleItems = snapshot.menuItems.filter((item) => {
+    const matchesCategory = selectedCategoryId === 'all' || item.categoryId === selectedCategoryId;
+    const matchesSearch = !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
   function setQty(itemId: string, nextQty: number) {
     setCart((current) => {
@@ -59,10 +158,16 @@ export function CustomerOrder() {
     }
   }
 
-  const totalQuantity = cartItems.reduce((sum, entry) => sum + entry.quantity, 0);
+  if (submittedOrder) {
+    return (
+      <div className="co-shell">
+        <OrderConfirmation order={submittedOrder} table={table} />
+      </div>
+    );
+  }
 
   return (
-    <div className="customer-shell">
+    <div className="co-shell">
       <CustomerDetailsModal
         isOpen={showDetailsModal}
         onClose={() => setShowDetailsModal(false)}
@@ -71,84 +176,98 @@ export function CustomerOrder() {
         title="Your Table Order Details"
       />
 
-      {!submittedOrder && (
-        <header className="customer-hero">
-          <div>
-            <span>{snapshot.organization.name}</span>
-            <h1>{table?.displayName || 'Table Order'}</h1>
-          </div>
-        </header>
-      )}
+      {/* ── Header ── */}
+      <header className="co-header">
+        <button className="co-header-back" aria-label="Back">
+          <ChevronLeft size={22} />
+        </button>
+        <div className="co-header-center">
+          <strong>{table?.displayName || 'Menu'}</strong>
+          <span>{snapshot.organization.name}</span>
+        </div>
+        <button className="co-header-details-btn">Table Details</button>
+      </header>
 
-      <main className={`screen customer-screen ${submittedOrder ? 'confirmation' : ''}`}>
-        {submittedOrder ? (
-          <OrderConfirmation order={submittedOrder} table={table} />
+      {/* ── Search bar ── */}
+      <div className="co-search-row">
+        <div className="co-search-inner">
+          <Search size={16} color="#9ca3af" />
+          <input
+            type="text"
+            placeholder="Search for dishes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <SlidersHorizontal size={16} color="#9ca3af" />
+        </div>
+      </div>
+
+      {/* ── Category tabs ── */}
+      <div className="co-tabs-wrap">
+        <div className="co-tabs">
+          <button
+            className={`co-tab ${selectedCategoryId === 'all' ? 'co-tab-active' : ''}`}
+            onClick={() => setSelectedCategoryId('all')}
+          >
+            <span className="co-tab-icon">🍽️</span>
+            All
+          </button>
+          {snapshot.categories.map((category) => (
+            <button
+              key={category.id}
+              className={`co-tab ${selectedCategoryId === category.id ? 'co-tab-active' : ''}`}
+              onClick={() => setSelectedCategoryId(category.id)}
+            >
+              <span className="co-tab-icon">🍴</span>
+              {category.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Menu list ── */}
+      <main className="co-menu-list">
+        {visibleItems.length === 0 ? (
+          <div className="co-empty">
+            <Leaf size={36} color="#d1d5db" />
+            <p>No items found</p>
+          </div>
         ) : (
-          <>
-            <div className="customer-tabs">
-              <button
-                className={selectedCategoryId === 'all' ? 'active' : ''}
-                onClick={() => setSelectedCategoryId('all')}
-              >
-                All
-              </button>
-              {snapshot.categories.map((category) => (
-                <button
-                  className={selectedCategoryId === category.id ? 'active' : ''}
-                  onClick={() => setSelectedCategoryId(category.id)}
-                  key={category.id}
-                >
-                  {category.name}
-                </button>
-              ))}
-            </div>
-            <div className="menu-list">
-              {visibleItems.map((item) => (
-                <MenuItemCard
-                  item={item}
-                  key={item.id}
-                  action={
-                    cart[item.id] ? (
-                      <QuantityControl
-                        quantity={cart[item.id]}
-                        onMinus={() => setQty(item.id, cart[item.id] - 1)}
-                        onPlus={() => setQty(item.id, cart[item.id] + 1)}
-                      />
-                    ) : (
-                      <button className="add-button" onClick={() => setQty(item.id, 1)}>
-                        Add
-                      </button>
-                    )
-                  }
-                />
-              ))}
-            </div>
-          </>
+          visibleItems.map((item) => (
+            <CustomerMenuCard
+              key={item.id}
+              item={item}
+              qty={cart[item.id] || 0}
+              onAdd={() => setQty(item.id, 1)}
+              onMinus={() => setQty(item.id, (cart[item.id] || 1) - 1)}
+              onPlus={() => setQty(item.id, (cart[item.id] || 0) + 1)}
+            />
+          ))
         )}
       </main>
 
-      {!submittedOrder && (
-        <footer className="cart-bar">
-          <button
-            className="primary-action wide"
-            disabled={!cartItems.length || isSubmitting}
-            onClick={() => setShowDetailsModal(true)}
-          >
-            {isSubmitting ? (
-              <Loader2 className="animate-spin" size={18} />
-            ) : (
-              <>
-                <span>Place Order ({totalQuantity})</span>
-                <b>{currency.format(total)}</b>
-              </>
-            )}
-          </button>
-        </footer>
-      )}
+      {/* ── Place Order bar ── */}
+      <footer
+        className={`co-place-order-bar ${totalQuantity === 0 ? 'co-place-order-bar-empty' : ''}`}
+        onClick={() => totalQuantity > 0 && setShowDetailsModal(true)}
+      >
+        <div className="co-place-order-left">
+          <ShoppingBag size={20} />
+          <div>
+            <strong>Place Order ({totalQuantity})</strong>
+            <small>{totalQuantity === 0 ? 'Add items to get started' : `${totalQuantity} item${totalQuantity > 1 ? 's' : ''} in cart`}</small>
+          </div>
+        </div>
+        <div className="co-place-order-right">
+          <span>{currency.format(total)}</span>
+          {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <span>›</span>}
+        </div>
+      </footer>
     </div>
   );
 }
 
+// --- Order Confirmation screen ---
 export function OrderConfirmation({ order, table }: { order: Order; table: DiningTable }) {
   const steps: OrderStatus[] = ['placed', 'confirmed', 'preparing', 'ready', 'served'];
 

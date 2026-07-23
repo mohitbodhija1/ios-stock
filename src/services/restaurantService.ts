@@ -143,7 +143,8 @@ export const restaurantService = {
         basePrice: Number(i.base_price),
         taxPercentage: Number(i.tax_percentage || 0),
         foodType: i.food_type || 'vegetarian',
-        isAvailable: Boolean(i.is_available)
+        isAvailable: Boolean(i.is_available),
+        imageUrl: i.image_url || undefined
       }));
 
       const mappedOrders: Order[] = (ordersData || []).map((o) => ({
@@ -318,6 +319,7 @@ export const restaurantService = {
     categoryId: string;
     locationId: string;
     orgId: string;
+    imageUrl?: string;
   }) {
     if (!isSupabaseConfigured || !supabase) {
       const newItem: MenuItem = {
@@ -345,7 +347,8 @@ export const restaurantService = {
         base_price: item.basePrice,
         tax_percentage: item.taxPercentage,
         food_type: item.foodType,
-        is_available: true
+        is_available: true,
+        image_url: item.imageUrl || null
       })
       .select()
       .single();
@@ -353,6 +356,21 @@ export const restaurantService = {
     if (error) throw error;
     await this.fetchTenantSnapshot(item.locationId);
     return data;
+  },
+
+  async uploadMenuItemImage(file: File, orgId: string): Promise<string> {
+    if (!isSupabaseConfigured || !supabase) {
+      // Return a local object URL as fallback when Supabase is not configured
+      return URL.createObjectURL(file);
+    }
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${orgId}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage
+      .from('menu-images')
+      .upload(path, file, { upsert: false, contentType: file.type });
+    if (error) throw new Error(`Image upload failed: ${error.message}`);
+    const { data: urlData } = supabase.storage.from('menu-images').getPublicUrl(path);
+    return urlData.publicUrl;
   },
 
   async toggleMenuItemAvailability(itemId: string, isAvailable: boolean) {

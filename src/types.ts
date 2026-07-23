@@ -51,6 +51,7 @@ export interface MenuItem {
   taxPercentage: number;
   foodType: 'vegetarian' | 'non_vegetarian' | 'beverage' | 'vegan';
   isAvailable: boolean;
+  imageUrl?: string;
 }
 
 export interface OrderItem {
