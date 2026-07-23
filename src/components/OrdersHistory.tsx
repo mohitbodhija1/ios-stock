@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ReceiptText, Search, X, Printer } from 'lucide-react';
 import { currency, statusLabel, formatTime } from '../utils/formatters';
+import { OrderHistoryActions } from './OrderHistoryActions';
 import type { useSnapshot } from '../hooks/useSnapshot';
 import type { Order } from '../types';
 
@@ -130,18 +131,21 @@ export function OrdersHistory({ snapshot }: { snapshot: ReturnType<typeof useSna
                   ))}
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #f1f5f9', gap: '12px', flexWrap: 'wrap' }}>
                   <div>
                     <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>Total Amount: </span>
                     <strong style={{ fontSize: '1.05rem' }}>{currency.format(order.totalAmount)}</strong>
                   </div>
-                  <button
-                    className="subtle-button compact"
-                    onClick={() => setSelectedOrderForReceipt(order)}
-                    style={{ gap: '6px' }}
-                  >
-                    <Printer size={14} /> View / Print Receipt
-                  </button>
+                  <div className="order-history-row-footer">
+                    <OrderHistoryActions order={order} />
+                    <button
+                      className="subtle-button compact"
+                      onClick={() => setSelectedOrderForReceipt(order)}
+                      style={{ gap: '6px' }}
+                    >
+                      <Printer size={14} /> View / Print Receipt
+                    </button>
+                  </div>
                 </div>
               </article>
             );

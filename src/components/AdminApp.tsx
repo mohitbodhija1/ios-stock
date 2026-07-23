@@ -22,14 +22,18 @@ function UserSelect({
   value,
   onChange,
   required = false,
-  placeholder = 'Select a user'
+  placeholder = 'Select a user',
+  excludeUserIds = []
 }: {
   users: AdminUser[];
   value: string;
   onChange: (userId: string) => void;
   required?: boolean;
   placeholder?: string;
+  excludeUserIds?: string[];
 }) {
+  const availableUsers = users.filter((user) => !excludeUserIds.includes(user.userId));
+
   return (
     <select
       className="admin-user-select"
@@ -38,7 +42,7 @@ function UserSelect({
       required={required}
     >
       <option value="">{placeholder}</option>
-      {users.map((user) => (
+      {availableUsers.map((user) => (
         <option key={user.userId} value={user.userId}>
           {adminService.formatUserLabel(user)}
         </option>
@@ -204,7 +208,9 @@ export function AdminApp({
       setAssignUserId('');
       await loadData();
     } catch (err: any) {
-      const message = err.message?.includes('owner_user_not_found')
+      const message = err.message?.includes('owner_already_assigned')
+        ? 'This user is already an owner of this restaurant.'
+        : err.message?.includes('owner_user_not_found')
         ? 'Selected user no longer exists.'
         : err.message || 'Failed to assign owner.';
       setErrorMsg(message);
@@ -313,15 +319,15 @@ export function AdminApp({
           <article className="admin-stat-card">
             <Building2 size={20} />
             <div>
-              <strong>{organizations.filter((o) => o.owners.length > 0).length}</strong>
-              <span>With Owner Assigned</span>
+              <strong>{organizations.reduce((sum, org) => sum + org.owners.length, 0)}</strong>
+              <span>Total Owners</span>
             </div>
           </article>
           <article className="admin-stat-card">
             <AlertCircle size={20} />
             <div>
               <strong>{organizations.filter((o) => o.owners.length === 0).length}</strong>
-              <span>Pending Owner</span>
+              <span>Without Owners</span>
             </div>
           </article>
         </div>
@@ -354,7 +360,7 @@ export function AdminApp({
                   <tr>
                     <th>Restaurant</th>
                     <th>Branch</th>
-                    <th>Owner</th>
+                    <th>Owners</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -362,7 +368,6 @@ export function AdminApp({
                 <tbody>
                   {organizations.map((org) => {
                     const location = org.locations[0];
-                    const owner = org.owners[0];
                     return (
                       <tr key={org.id}>
                         <td>
@@ -380,31 +385,35 @@ export function AdminApp({
                           )}
                         </td>
                         <td>
-                          {owner ? (
-                            userById[owner.userId]
-                              ? adminService.formatUserLabel(userById[owner.userId])
-                              : owner.fullName || 'Owner assigned'
+                          {org.owners.length > 0 ? (
+                            <ul className="admin-owner-list">
+                              {org.owners.map((owner) => (
+                                <li key={owner.userId}>
+                                  {userById[owner.userId]
+                                    ? adminService.formatUserLabel(userById[owner.userId])
+                                    : owner.fullName || 'Owner assigned'}
+                                </li>
+                              ))}
+                            </ul>
                           ) : (
-                            <span className="admin-pending-badge">No owner</span>
+                            <span className="admin-pending-badge">No owners</span>
                           )}
                         </td>
                         <td>
                           <span className={`admin-status-badge ${org.status}`}>{org.status}</span>
                         </td>
                         <td>
-                          {!owner && (
-                            <button
-                              className="link-button"
-                              onClick={() => {
-                                setAssigningOrgId(org.id);
-                                setAssignUserId('');
-                                setErrorMsg('');
-                                setSuccessMsg('');
-                              }}
-                            >
-                              <UserPlus size={14} /> Assign Owner
-                            </button>
-                          )}
+                          <button
+                            className="link-button"
+                            onClick={() => {
+                              setAssigningOrgId(org.id);
+                              setAssignUserId('');
+                              setErrorMsg('');
+                              setSuccessMsg('');
+                            }}
+                          >
+                            <UserPlus size={14} /> Add Owner
+                          </button>
                         </td>
                       </tr>
                     );
@@ -423,7 +432,7 @@ export function AdminApp({
               <div className="auth-header">
                 <Building2 size={36} className="brand-icon" />
                 <h2>Onboard New Restaurant</h2>
-                <p>Create organization, first branch, and optionally assign the owner.</p>
+                <p>Create organization, first branch, and optionally assign an owner.</p>
               </div>
 
               <label className="field-label">
@@ -530,21 +539,31 @@ export function AdminApp({
             <form onSubmit={handleAssignOwner} className="auth-form">
               <div className="auth-header">
                 <UserPlus size={36} className="brand-icon" />
-                <h2>Assign Owner</h2>
-                <p>Link a registered user as the restaurant owner.</p>
+                <h2>Add Owner</h2>
+                <p>Add another registered user as a restaurant owner.</p>
               </div>
 
               <label className="field-label">
-                <span>Assign Owner *</span>
+                <span>Select Owner *</span>
                 <UserSelect
                   users={users}
                   value={assignUserId}
                   onChange={setAssignUserId}
                   required
                   placeholder="Select a user"
+                  excludeUserIds={
+                    assigningOrgId
+                      ? organizations.find((org) => org.id === assigningOrgId)?.owners.map((owner) => owner.userId) || []
+                      : []
+                  }
                 />
                 {users.length === 0 && (
                   <small className="field-hint">No registered users found. Ask the owner to sign up first.</small>
+                )}
+                {assigningOrgId && users.length > 0 && (
+                  <small className="field-hint">
+                    Users already assigned as owners are hidden from this list.
+                  </small>
                 )}
               </label>
 
@@ -558,7 +577,7 @@ export function AdminApp({
                   Cancel
                 </button>
                 <button type="submit" className="primary-action" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : 'Assign Owner'}
+                  {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : 'Add Owner'}
                 </button>
               </div>
             </form>

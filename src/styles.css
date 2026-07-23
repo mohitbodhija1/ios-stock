@@ -472,14 +472,85 @@ a {
 .dashboard-history-row {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
   min-height: 58px;
   padding: 11px;
   color: var(--text);
-  text-decoration: none;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.dashboard-history-row-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dashboard-history-row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.dashboard-history-row-amount {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
+.dashboard-history-row-amount small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.order-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.order-history-actions.compact {
+  gap: 6px;
+}
+
+.order-history-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.order-history-action-btn.update {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+}
+
+.order-history-action-btn.pay {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.order-history-row-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .dashboard-history-row.editable {
@@ -4820,6 +4891,20 @@ select,
 .muted-text {
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+.admin-owner-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.admin-owner-list li {
+  margin-bottom: 4px;
+}
+
+.admin-owner-list li:last-child {
+  margin-bottom: 0;
 }
 
 .admin-user-select {

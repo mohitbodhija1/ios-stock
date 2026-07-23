@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, X } from 'lucide-react';
 import { restaurantService } from '../services/restaurantService';
 import { currency } from '../utils/formatters';
@@ -8,6 +9,7 @@ import type { PaymentMethod } from '../types';
 
 export function Billing({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const unpaidOrders = snapshot.orders.filter(
     (order) => order.paymentStatus === 'pending' && order.orderStatus !== 'cancelled'
   );
@@ -21,6 +23,18 @@ export function Billing({ snapshot }: { snapshot: ReturnType<typeof useSnapshot>
       setSelectedOrderId(unpaidOrders[0].id);
     }
   }, [selectedOrderId, unpaidOrders]);
+
+  useEffect(() => {
+    const orderParam = searchParams.get('order');
+    if (!orderParam) return;
+
+    const matchedOrder = unpaidOrders.find((order) => order.id === orderParam);
+    if (matchedOrder) {
+      setSelectedOrderId(matchedOrder.id);
+      setIsCheckoutOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, unpaidOrders, setSearchParams]);
 
   const selectedOrder = unpaidOrders.find((order) => order.id === selectedOrderId) || unpaidOrders[0];
   const selectedTable = selectedOrder ? snapshot.tables.find((item) => item.id === selectedOrder.tableId) : null;

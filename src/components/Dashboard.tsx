@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { currency, formatTime, statusLabel } from '../utils/formatters';
+import { OrderHistoryActions } from './OrderHistoryActions';
 import type { useSnapshot } from '../hooks/useSnapshot';
 
 export function Dashboard({ snapshot }: { snapshot: ReturnType<typeof useSnapshot> }) {
@@ -76,27 +77,20 @@ export function Dashboard({ snapshot }: { snapshot: ReturnType<typeof useSnapsho
           ) : (
             recentOrders.map((order) => {
               const table = snapshot.tables.find((item) => item.id === order.tableId);
-              const canEdit = order.paymentStatus === 'pending' && !['completed', 'cancelled'].includes(order.orderStatus);
-              const rowContent = (
-                <>
-                  <span>
+
+              return (
+                <div className="dashboard-history-row" key={order.id}>
+                  <div className="dashboard-history-row-main">
                     <b>{order.customerName || 'Guest'} • {table?.displayName || 'Table'}</b>
                     <small>#{order.orderNumber} • {formatTime(order.createdAt)} • {order.items.length} items</small>
-                  </span>
-                  <span>
-                    <b>{currency.format(order.totalAmount)}</b>
-                    <small>{canEdit ? 'Tap to edit' : statusLabel(order.orderStatus)}</small>
-                  </span>
-                </>
-              );
-
-              return canEdit ? (
-                <Link className="dashboard-history-row editable" to={`/app/order?order=${order.id}`} key={order.id}>
-                  {rowContent}
-                </Link>
-              ) : (
-                <div className="dashboard-history-row" key={order.id}>
-                  {rowContent}
+                  </div>
+                  <div className="dashboard-history-row-side">
+                    <div className="dashboard-history-row-amount">
+                      <b>{currency.format(order.totalAmount)}</b>
+                      <small>{statusLabel(order.orderStatus)}</small>
+                    </div>
+                    <OrderHistoryActions order={order} compact />
+                  </div>
                 </div>
               );
             })
