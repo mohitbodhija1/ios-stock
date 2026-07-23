@@ -37,11 +37,17 @@ import { BookDemoModal } from './BookDemoModal';
 
 interface LandingPageProps {
   onOpenAuth: () => void;
+  onOpenAdminAuth?: () => void;
   userEmail: string | null;
   orgName: string;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, userEmail, orgName }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({
+  onOpenAuth,
+  onOpenAdminAuth,
+  userEmail,
+  orgName
+}) => {
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
@@ -700,6 +706,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, userEmail,
         <div className="footer-bottom-bar">
           <p className="copyright-text">
             © {new Date().getFullYear()} DineDesk. All rights reserved.
+            {onOpenAdminAuth && (
+              <>
+                {' · '}
+                <button type="button" className="link-button" onClick={onOpenAdminAuth}>
+                  Platform Admin
+                </button>
+              </>
+            )}
           </p>
           <div className="social-links-row">
             <a href="#" className="social-icon" aria-label="Facebook"><Facebook size={16} /></a>

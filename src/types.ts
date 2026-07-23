@@ -1,4 +1,4 @@
-export type Role = 'owner' | 'manager' | 'waiter' | 'kitchen_staff' | 'cashier';
+export type Role = 'owner' | 'admin' | 'manager' | 'waiter' | 'kitchen_staff' | 'cashier';
 export type TableStatus = 'available' | 'occupied' | 'cleaning' | 'inactive';
 export type OrderStatus = 'placed' | 'confirmed' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled';
 export type PaymentStatus = 'pending' | 'paid';
@@ -88,4 +88,37 @@ export interface Payment {
   amount: number;
   paymentMethod: PaymentMethod;
   paidAt: string;
+}
+
+export interface AdminOrganizationLocation {
+  id: string;
+  name: string;
+  slug: string;
+  city: string | null;
+  status: string;
+}
+
+export interface AdminOrganizationOwner {
+  userId: string;
+  fullName: string | null;
+  role: string;
+}
+
+export interface AdminOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  email: string | null;
+  phone: string | null;
+  status: string;
+  createdAt: string;
+  locations: AdminOrganizationLocation[];
+  owners: AdminOrganizationOwner[];
+}
+
+export interface AdminOnboardResult {
+  organizationId: string;
+  locationId: string;
+  ownerUserId: string | null;
+  ownerAssigned: boolean;
 }

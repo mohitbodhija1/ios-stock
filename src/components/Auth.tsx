@@ -1,28 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { adminService } from '../services/adminService';
 import { restaurantService } from '../services/restaurantService';
-import { LogIn, UserPlus, Building2, Store, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { LogIn, UserPlus, Store, CheckCircle, AlertCircle, Loader2, Shield } from 'lucide-react';
 
 interface AuthProps {
-  onAuthComplete: () => void;
+  onAuthComplete: (destination: '/admin' | '/app') => void;
+  adminMode?: boolean;
 }
 
-export function AuthModal({ onAuthComplete }: AuthProps) {
-  const [session, setSession] = useState<any>(null);
+export function AuthModal({ onAuthComplete, adminMode = false }: AuthProps) {
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<'login' | 'signup' | 'onboarding'>('login');
-  
-  // Auth Form Fields
+  const [mode, setMode] = useState<'login' | 'signup' | 'pending'>('login');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-
-  // Onboarding Form Fields
-  const [orgName, setOrgName] = useState('');
-  const [orgSlug, setOrgSlug] = useState('');
-  const [locName, setLocName] = useState('Main Branch');
-  const [locSlug, setLocSlug] = useState('main');
-  const [city, setCity] = useState('Delhi');
 
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -35,18 +28,16 @@ export function AuthModal({ onAuthComplete }: AuthProps) {
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
       if (session) {
-        checkExistingOrg();
+        resolveDestination();
       } else {
         setLoading(false);
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
       if (session) {
-        checkExistingOrg();
+        resolveDestination();
       } else {
         setLoading(false);
       }
@@ -55,24 +46,34 @@ export function AuthModal({ onAuthComplete }: AuthProps) {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function checkExistingOrg() {
+  async function resolveDestination() {
     try {
-      const snapshot = await restaurantService.fetchTenantSnapshot();
-      // If organization exists, we're ready
-      if (snapshot.organization.id) {
-        onAuthComplete();
-      } else {
-        // Check if there is an org in Supabase
-        const { data } = await supabase!.from('organizations').select('id').limit(1);
-        if (data && data.length > 0) {
-          onAuthComplete();
-        } else {
-          setMode('onboarding');
-        }
+      const isAdmin = await adminService.isPlatformAdmin();
+      if (isAdmin || adminMode) {
+        onAuthComplete('/admin');
+        return;
       }
+
+      const snapshot = await restaurantService.fetchTenantSnapshot();
+      if (snapshot.organization.id) {
+        onAuthComplete('/app');
+        return;
+      }
+
+      const { data: memberships } = await supabase!
+        .from('organization_members')
+        .select('id')
+        .limit(1);
+
+      if (memberships && memberships.length > 0) {
+        onAuthComplete('/app');
+        return;
+      }
+
+      setMode('pending');
     } catch (err) {
       console.error(err);
-      setMode('onboarding');
+      setMode('pending');
     } finally {
       setLoading(false);
     }
@@ -96,10 +97,10 @@ export function AuthModal({ onAuthComplete }: AuthProps) {
           options: { data: { full_name: fullName } }
         });
         if (error) throw error;
-        
+
         if (data?.session) {
-          setSuccessMsg('Account created successfully! Checking organization...');
-          await checkExistingOrg();
+          setSuccessMsg('Account created successfully!');
+          await resolveDestination();
         } else {
           setSuccessMsg('Registration successful! Please check your email to confirm your account, then sign in.');
           setMode('login');
@@ -111,41 +112,10 @@ export function AuthModal({ onAuthComplete }: AuthProps) {
         });
         if (error) throw error;
         setSuccessMsg('Logged in successfully!');
-        await checkExistingOrg();
+        await resolveDestination();
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Authentication failed.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleOnboarding(e: React.FormEvent) {
-    e.preventDefault();
-    setErrorMsg('');
-    setSuccessMsg('');
-    setIsSubmitting(true);
-
-    try {
-      const { data: { user } } = await supabase!.auth.getUser();
-      if (!user) {
-        throw new Error('No active session found. Please sign in or confirm your email to activate your account.');
-      }
-
-      const slugifiedOrg = orgSlug || orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      const slugifiedLoc = locSlug || locName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-
-      await restaurantService.createOrganizationWithOwner(
-        orgName,
-        slugifiedOrg,
-        locName,
-        slugifiedLoc,
-        city
-      );
-      setSuccessMsg('Restaurant onboarded successfully!');
-      onAuthComplete();
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to create organization.');
     } finally {
       setIsSubmitting(false);
     }
@@ -165,88 +135,48 @@ export function AuthModal({ onAuthComplete }: AuthProps) {
   return (
     <div className="auth-overlay">
       <div className="auth-card">
-        {mode === 'onboarding' ? (
-          <form onSubmit={handleOnboarding} className="auth-form">
+        {mode === 'pending' ? (
+          <div className="auth-form">
             <div className="auth-header">
-              <Building2 size={36} className="brand-icon" />
-              <h2>Onboard Your Restaurant</h2>
-              <p>Set up your organization and first branch in Supabase.</p>
+              <AlertCircle size={36} className="brand-icon" style={{ color: 'var(--warning, #f79009)' }} />
+              <h2>Account Not Linked</h2>
+              <p>
+                Your account is not linked to any restaurant yet. Ask your platform administrator to
+                onboard your restaurant and assign you as the owner.
+              </p>
             </div>
-
-            {errorMsg && <div className="auth-error"><AlertCircle size={16} /> {errorMsg}</div>}
-            {successMsg && <div className="auth-success"><CheckCircle size={16} /> {successMsg}</div>}
-
-            <label className="field-label">
-              <span>Restaurant / Brand Name *</span>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Urban Bistro"
-                value={orgName}
-                onChange={(e) => {
-                  setOrgName(e.target.value);
-                  if (!orgSlug) setOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
-                }}
-              />
-            </label>
-
-            <label className="field-label">
-              <span>Brand URL Slug</span>
-              <input
-                type="text"
-                required
-                placeholder="e.g. urban-bistro"
-                value={orgSlug}
-                onChange={(e) => setOrgSlug(e.target.value)}
-              />
-            </label>
-
-            <div className="form-row">
-              <label className="field-label">
-                <span>Branch Location Name *</span>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Main Dining"
-                  value={locName}
-                  onChange={(e) => setLocName(e.target.value)}
-                />
-              </label>
-
-              <label className="field-label">
-                <span>City *</span>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Delhi"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
-              </label>
-            </div>
-
-            <button type="submit" className="primary-action wide" disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : 'Create Restaurant & Continue'}
+            <button type="button" className="secondary-action wide" onClick={() => supabase?.auth.signOut()}>
+              Sign Out
             </button>
-          </form>
+          </div>
         ) : (
           <form onSubmit={handleAuth} className="auth-form">
             <div className="auth-header">
-              <Store size={36} className="brand-icon" />
-              <h2>{mode === 'login' ? 'Staff Sign In' : 'Register Manager Account'}</h2>
-              <p>Access your live Supabase restaurant dashboard.</p>
+              {adminMode ? <Shield size={36} className="brand-icon" /> : <Store size={36} className="brand-icon" />}
+              <h2>
+                {adminMode
+                  ? 'Platform Admin Sign In'
+                  : mode === 'login'
+                    ? 'Staff Sign In'
+                    : 'Register Account'}
+              </h2>
+              <p>
+                {adminMode
+                  ? 'Sign in to onboard and manage restaurants.'
+                  : 'Access your restaurant dashboard.'}
+              </p>
             </div>
 
             {errorMsg && <div className="auth-error"><AlertCircle size={16} /> {errorMsg}</div>}
             {successMsg && <div className="auth-success"><CheckCircle size={16} /> {successMsg}</div>}
 
-            {mode === 'signup' && (
+            {mode === 'signup' && !adminMode && (
               <label className="field-label">
                 <span>Full Name</span>
                 <input
                   type="text"
                   required
-                  placeholder="Manager Name"
+                  placeholder="Your Name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                 />
@@ -258,7 +188,7 @@ export function AuthModal({ onAuthComplete }: AuthProps) {
               <input
                 type="email"
                 required
-                placeholder="manager@restaurant.com"
+                placeholder={adminMode ? 'admin@yourdomain.com' : 'staff@restaurant.com'}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -290,23 +220,25 @@ export function AuthModal({ onAuthComplete }: AuthProps) {
               )}
             </button>
 
-            <div className="auth-toggle">
-              {mode === 'login' ? (
-                <p>
-                  New restaurant?{' '}
-                  <button type="button" onClick={() => setMode('signup')} className="link-button">
-                    Register Here
-                  </button>
-                </p>
-              ) : (
-                <p>
-                  Already have an account?{' '}
-                  <button type="button" onClick={() => setMode('login')} className="link-button">
-                    Sign In
-                  </button>
-                </p>
-              )}
-            </div>
+            {!adminMode && (
+              <div className="auth-toggle">
+                {mode === 'login' ? (
+                  <p>
+                    New staff member?{' '}
+                    <button type="button" onClick={() => setMode('signup')} className="link-button">
+                      Register Here
+                    </button>
+                  </p>
+                ) : (
+                  <p>
+                    Already have an account?{' '}
+                    <button type="button" onClick={() => setMode('login')} className="link-button">
+                      Sign In
+                    </button>
+                  </p>
+                )}
+              </div>
+            )}
           </form>
         )}
       </div>

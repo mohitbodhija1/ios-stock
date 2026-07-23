@@ -1,17 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import {
+  AlertCircle,
   BookOpen,
+  Building,
   ChefHat,
   ClipboardList,
   Home,
   IndianRupee,
   LogOut,
   ReceiptText,
-  RefreshCw,
-  Utensils,
-  Building,
-  Bell
+  Utensils
 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useSnapshot } from '../hooks/useSnapshot';
@@ -36,7 +35,7 @@ export function StaffApp({
   setShowAuthModal: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const navigate = useNavigate();
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const hasRestaurantAccess = Boolean(snapshot.organization.id);
 
   async function handleSignOut() {
     if (supabase) {
@@ -49,15 +48,40 @@ export function StaffApp({
     }
   }
 
-  async function handleRefresh() {
-    setIsRefreshing(true);
-    try {
-      await snapshot.refresh();
-    } catch (err) {
-      console.error('Refresh error:', err);
-    } finally {
-      setIsRefreshing(false);
-    }
+  if (isSupabaseConfigured && !userEmail) {
+    return (
+      <div className="admin-shell">
+        <div className="admin-access-card">
+          <Building size={40} className="brand-icon" />
+          <h1>Staff Sign In Required</h1>
+          <p>Sign in to access your restaurant dashboard.</p>
+          <button className="primary-action wide" onClick={() => setShowAuthModal(true)}>
+            Sign In
+          </button>
+          <Link to="/" className="admin-back-link">Back to home</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (isSupabaseConfigured && userEmail && !snapshot.loading && !hasRestaurantAccess) {
+    return (
+      <div className="admin-shell">
+        <div className="admin-access-card">
+          <AlertCircle size={40} color="var(--danger)" />
+          <h1>No Restaurant Access</h1>
+          <p>
+            <strong>{userEmail}</strong> is not linked to any restaurant yet.
+          </p>
+          <p className="muted-text">
+            Ask your platform administrator to onboard your restaurant and assign you as the owner.
+          </p>
+          <button className="secondary-action wide" onClick={handleSignOut}>
+            <LogOut size={16} /> Sign Out
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

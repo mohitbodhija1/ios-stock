@@ -23,33 +23,108 @@ const statusFlow: Record<OrderStatus, OrderStatus[]> = {
 };
 
 // In-memory cache initialized with empty defaults
-let localSnapshot: TenantSnapshot = {
-  organization: { id: '', name: '', slug: '' },
-  location: { id: '', organizationId: '', name: '', slug: '', city: '', currency: 'INR' },
-  diningAreas: [],
-  tables: [],
-  categories: [],
-  menuItems: [],
-  orders: [],
-  payments: []
-};
+function createEmptySnapshot(): TenantSnapshot {
+  return {
+    organization: { id: '', name: '', slug: '' },
+    location: { id: '', organizationId: '', name: '', slug: '', city: '', currency: 'INR' },
+    diningAreas: [],
+    tables: [],
+    categories: [],
+    menuItems: [],
+    orders: [],
+    payments: []
+  };
+}
+
+let localSnapshot: TenantSnapshot = createEmptySnapshot();
 
 export const restaurantService = {
   getTenantSnapshot(): TenantSnapshot {
     return localSnapshot;
   },
 
-  async fetchTenantSnapshot(customLocationId?: string): Promise<TenantSnapshot> {
+  async fetchTenantSnapshot(customLocationId?: string, tableToken?: string): Promise<TenantSnapshot> {
     if (!isSupabaseConfigured || !supabase) {
       return localSnapshot;
     }
 
     try {
-      // Fetch organization & location
-      const { data: orgData } = await supabase.from('organizations').select('*').limit(1).maybeSingle();
-      const { data: locData } = await supabase.from('restaurant_locations').select('*').limit(1).maybeSingle();
+      let orgData: Record<string, any> | null = null;
+      let locData: Record<string, any> | null = null;
+
+      let prefetchedTable: DiningTable | null = null;
+
+      if (tableToken) {
+        const { data: context, error: contextError } = await supabase.rpc('get_customer_menu_context', {
+          table_token: tableToken
+        });
+
+        if (contextError || !context?.organization || !context?.location) {
+          localSnapshot = createEmptySnapshot();
+          return localSnapshot;
+        }
+
+        orgData = context.organization;
+        locData = context.location;
+
+        if (context.table) {
+          prefetchedTable = {
+            id: context.table.id,
+            locationId: context.table.location_id,
+            diningAreaId: context.table.dining_area_id || '',
+            tableNumber: context.table.table_number,
+            displayName: context.table.display_name,
+            capacity: context.table.capacity,
+            status: context.table.status,
+            publicToken: context.table.public_token
+          };
+        }
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          localSnapshot = createEmptySnapshot();
+          return localSnapshot;
+        }
+
+        const { data: membership, error: membershipError } = await supabase
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (membershipError || !membership) {
+          localSnapshot = createEmptySnapshot();
+          return localSnapshot;
+        }
+
+        let locationQuery = supabase
+          .from('restaurant_locations')
+          .select('*')
+          .eq('organization_id', membership.organization_id)
+          .order('created_at', { ascending: true });
+
+        if (customLocationId) {
+          locationQuery = locationQuery.eq('id', customLocationId);
+        }
+
+        const [{ data: org }, { data: loc }] = await Promise.all([
+          supabase
+            .from('organizations')
+            .select('*')
+            .eq('id', membership.organization_id)
+            .maybeSingle(),
+          locationQuery.limit(1).maybeSingle()
+        ]);
+
+        orgData = org;
+        locData = loc;
+      }
 
       if (!orgData || !locData) {
+        localSnapshot = createEmptySnapshot();
         return localSnapshot;
       }
 
@@ -62,12 +137,14 @@ export const restaurantService = {
         .eq('location_id', locationId)
         .order('display_order', { ascending: true });
 
-      // Fetch tables
-      const { data: tablesData } = await supabase
-        .from('dining_tables')
-        .select('*')
-        .eq('location_id', locationId)
-        .order('created_at', { ascending: true });
+      // Fetch tables (skip if customer context already loaded the target table)
+      const { data: tablesData } = prefetchedTable
+        ? { data: null }
+        : await supabase
+            .from('dining_tables')
+            .select('*')
+            .eq('location_id', locationId)
+            .order('created_at', { ascending: true });
 
       // Fetch menu categories
       const { data: catData } = await supabase
@@ -83,19 +160,23 @@ export const restaurantService = {
         .eq('location_id', locationId)
         .order('created_at', { ascending: true });
 
-      // Fetch orders with order_items
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select('*, order_items(*)')
-        .eq('location_id', locationId)
-        .order('created_at', { ascending: false });
+      // Customer QR pages only need public menu data, not staff order history.
+      const includeStaffData = !tableToken;
 
-      // Fetch payments
-      const { data: paymentsData } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('location_id', locationId)
-        .order('created_at', { ascending: false });
+      const [{ data: ordersData }, { data: paymentsData }] = includeStaffData
+        ? await Promise.all([
+            supabase
+              .from('orders')
+              .select('*, order_items(*)')
+              .eq('location_id', locationId)
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('payments')
+              .select('*')
+              .eq('location_id', locationId)
+              .order('created_at', { ascending: false })
+          ])
+        : [{ data: [] }, { data: [] }];
 
       const mappedOrg: Organization = {
         id: orgData.id,
@@ -118,16 +199,18 @@ export const restaurantService = {
         name: a.name
       }));
 
-      const mappedTables: DiningTable[] = (tablesData || []).map((t) => ({
-        id: t.id,
-        locationId: t.location_id,
-        diningAreaId: t.dining_area_id,
-        tableNumber: t.table_number,
-        displayName: t.display_name || `Table ${t.table_number}`,
-        capacity: t.capacity,
-        status: t.status,
-        publicToken: t.public_token
-      }));
+      const mappedTables: DiningTable[] = prefetchedTable
+        ? [prefetchedTable]
+        : (tablesData || []).map((t) => ({
+            id: t.id,
+            locationId: t.location_id,
+            diningAreaId: t.dining_area_id,
+            tableNumber: t.table_number,
+            displayName: t.display_name || `Table ${t.table_number}`,
+            capacity: t.capacity,
+            status: t.status,
+            publicToken: t.public_token
+          }));
 
       const mappedCategories: MenuCategory[] = (catData || []).map((c) => ({
         id: c.id,
@@ -195,8 +278,13 @@ export const restaurantService = {
       return localSnapshot;
     } catch (err) {
       console.error('Error fetching Supabase tenant snapshot:', err);
+      localSnapshot = createEmptySnapshot();
       return localSnapshot;
     }
+  },
+
+  clearTenantSnapshot() {
+    localSnapshot = createEmptySnapshot();
   },
 
   async createOrganizationWithOwner(
@@ -790,11 +878,23 @@ export const restaurantService = {
   subscribeToOrders(onUpdate: () => void) {
     if (!isSupabaseConfigured || !supabase) return () => {};
 
+    const locationId = localSnapshot.location.id;
+    if (!locationId) return () => {};
+
     const channel = supabase
-      .channel('public:orders_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        this.fetchTenantSnapshot().then(() => onUpdate());
-      })
+      .channel(`orders_realtime_${locationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `location_id=eq.${locationId}`
+        },
+        () => {
+          this.fetchTenantSnapshot(locationId).then(() => onUpdate());
+        }
+      )
       .subscribe();
 
     return () => {

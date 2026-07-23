@@ -106,8 +106,8 @@ function CustomerMenuCard({
 export function CustomerOrder() {
   const toast = useToast();
   const { tableToken } = useParams();
-  const snapshot = useSnapshot();
-  const table = snapshot.tables.find((item) => item.publicToken === tableToken) || snapshot.tables[0];
+  const snapshot = useSnapshot({ tableToken, enabled: Boolean(tableToken) });
+  const table = snapshot.tables.find((item) => item.publicToken === tableToken);
 
   const [cart, setCart] = useState<Record<string, number>>({});
   const [submittedOrder, setSubmittedOrder] = useState<Order | null>(null);
@@ -156,6 +156,24 @@ export function CustomerOrder() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (!tableToken || (!snapshot.loading && !table)) {
+    return (
+      <div className="co-shell">
+        <div className="admin-access-card" style={{ margin: '40px auto' }}>
+          <p>Invalid or inactive table QR code.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (snapshot.loading || !table) {
+    return (
+      <div className="co-shell flex-center">
+        <Loader2 className="animate-spin" size={32} />
+      </div>
+    );
   }
 
   if (submittedOrder) {
