@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { X, CheckCircle2, Calendar, Clock, Building2, User, Phone, Mail } from 'lucide-react';
+import { X, CheckCircle2, Calendar, Clock, Building2, User, Phone, Mail, Loader2 } from 'lucide-react';
+import { restaurantService } from '../services/restaurantService';
+import { useToast } from './Toast';
 
 interface BookDemoModalProps {
   isOpen: boolean;
@@ -7,7 +9,9 @@ interface BookDemoModalProps {
 }
 
 export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose }) => {
+  const toast = useToast();
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     restaurantName: '',
@@ -19,13 +23,22 @@ export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose })
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setIsSubmitting(true);
+    try {
+      await restaurantService.submitDemoRequest(formData);
+      setSubmitted(true);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit demo request. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReset = () => {
     setSubmitted(false);
+    setIsSubmitting(false);
     setFormData({
       name: '',
       restaurantName: '',
@@ -143,8 +156,15 @@ export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose })
                 </div>
               </div>
 
-              <button type="submit" className="dinedesk-btn primary full-width demo-submit-btn">
-                Confirm Demo Request
+              <button type="submit" className="dinedesk-btn primary full-width demo-submit-btn" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" style={{ marginRight: '8px', display: 'inline-block', verticalAlign: 'middle' }} />
+                    Submitting...
+                  </>
+                ) : (
+                  'Confirm Demo Request'
+                )}
               </button>
 
               <p className="demo-privacy-note">

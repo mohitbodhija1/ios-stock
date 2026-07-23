@@ -90,14 +90,20 @@ export function AuthModal({ onAuthComplete }: AuthProps) {
       }
 
       if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: { data: { full_name: fullName } }
         });
         if (error) throw error;
-        setSuccessMsg('Account created successfully! Checking organization...');
-        await checkExistingOrg();
+        
+        if (data?.session) {
+          setSuccessMsg('Account created successfully! Checking organization...');
+          await checkExistingOrg();
+        } else {
+          setSuccessMsg('Registration successful! Please check your email to confirm your account, then sign in.');
+          setMode('login');
+        }
       } else if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -121,6 +127,11 @@ export function AuthModal({ onAuthComplete }: AuthProps) {
     setIsSubmitting(true);
 
     try {
+      const { data: { user } } = await supabase!.auth.getUser();
+      if (!user) {
+        throw new Error('No active session found. Please sign in or confirm your email to activate your account.');
+      }
+
       const slugifiedOrg = orgSlug || orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
       const slugifiedLoc = locSlug || locName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 

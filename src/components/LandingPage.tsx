@@ -148,9 +148,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, userEmail,
 
             {/* CTA Buttons */}
             <div className="hero-cta-group">
-              <Link to="/app" className="dinedesk-btn hero-primary-btn">
+              <button className="dinedesk-btn hero-primary-btn" onClick={() => setIsDemoModalOpen(true)}>
                 Start Free Trial
-              </Link>
+              </button>
               <button className="dinedesk-btn hero-outline-btn" onClick={() => scrollToSection('how-it-works')}>
                 <Play size={14} fill="currentColor" /> See How It Works
               </button>
@@ -588,9 +588,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, userEmail,
             </p>
 
             <div className="cta-buttons-row">
-              <Link to="/app" className="dinedesk-btn cta-btn-solid">
+              <button className="dinedesk-btn cta-btn-solid" onClick={() => setIsDemoModalOpen(true)}>
                 Start Free Trial
-              </Link>
+              </button>
               <button className="dinedesk-btn cta-btn-outline" onClick={() => setIsDemoModalOpen(true)}>
                 Book a Demo
               </button>

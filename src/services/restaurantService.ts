@@ -608,6 +608,52 @@ export const restaurantService = {
     return order;
   },
 
+  async submitDemoRequest(request: {
+    name: string;
+    restaurantName: string;
+    phone: string;
+    email: string;
+    preferredDate: string;
+    preferredTime: string;
+  }) {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('demo_requests')
+        .insert({
+          name: request.name,
+          restaurant_name: request.restaurantName,
+          phone: request.phone,
+          email: request.email,
+          preferred_date: request.preferredDate,
+          preferred_time: request.preferredTime,
+        })
+        .select()
+        .maybeSingle();
+
+      if (!error) {
+        return data;
+      }
+      console.warn('Failed to submit demo request to Supabase, falling back to localStorage:', error);
+    }
+
+    // Fallback: localStorage
+    const localRequestsStr = localStorage.getItem('dinedesk_demo_requests') || '[]';
+    let localRequests = [];
+    try {
+      localRequests = JSON.parse(localRequestsStr);
+    } catch (e) {
+      localRequests = [];
+    }
+    const newRequest = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+      ...request,
+      created_at: new Date().toISOString()
+    };
+    localRequests.push(newRequest);
+    localStorage.setItem('dinedesk_demo_requests', JSON.stringify(localRequests));
+    return newRequest;
+  },
+
   subscribeToOrders(onUpdate: () => void) {
     if (!isSupabaseConfigured || !supabase) return () => {};
 
